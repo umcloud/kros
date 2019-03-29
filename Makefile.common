@@ -1,3 +1,4 @@
+SHELL=/bin/bash
 # Common variables to use in other subdirs Makefile-s as e.g.
 # include ../Makefile.common
 
@@ -7,4 +8,9 @@
 HOST_CNT={01..03}
 HOST_PREFIX=um-krosk-
 MASTER=$(HOST_PREFIX)01
-NODES_IPS=$(shell bash -c 'printf "%s\n" $(HOST_PREFIX)$(HOST_CNT)|xargs -l1 host|sed "s/.*address //"|paste -s')
+
+NODES=$(shell bash -c 'printf "%s\n" $(HOST_PREFIX)$(HOST_CNT)')
+NODES_IPS=$(shell bash -c 'printf "%s\n" $(NODES)|xargs -l1 host|sed "s/.*address //"|xargs')
+# Get parent dir of this Makefile.common is the ROOT_DIR
+ROOT_DIR=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+REPO_DIR=$(ROOT_DIR)/repos
