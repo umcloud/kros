@@ -1,0 +1,6 @@
+# Common variables to use in other subdirs Makefile-s as e.g.
+# include ../Makefile.common
+HOST_CNT={01..03}
+HOST_PREFIX=um-krosk-
+MASTER=$(HOST_PREFIX)01
+NODES_IPS=$(shell bash -c 'printf "%s\n" $(HOST_PREFIX)$(HOST_CNT)|xargs -l1 host|sed "s/.*address //"|paste -s')
