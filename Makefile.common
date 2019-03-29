@@ -1,5 +1,9 @@
 # Common variables to use in other subdirs Makefile-s as e.g.
 # include ../Makefile.common
+
+# Note that below must start at 01... as
+# kubespray/contrib/inventory_builder/inventory.py will still start its node
+# naming from "1" (even if below was set e.g. to {101..110}).
 HOST_CNT={01..03}
 HOST_PREFIX=um-krosk-
 MASTER=$(HOST_PREFIX)01
