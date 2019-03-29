@@ -10,3 +10,6 @@
     - name: um-krosk-03
       directories:
       - path: /srv/ceph/ceph0
+    - name: um-krosk-04
+      directories:
+      - path: /srv/ceph/ceph0
