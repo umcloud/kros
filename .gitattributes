@@ -1,0 +1,6 @@
+# As below are copied from upstream, mark mark them as linguist-generated
+# so that github doesn't show them by default
+r/configs/cluster.yaml linguist-generated
+r/configs/operator.yaml linguist-generated
+r/configs/storageclass.yaml linguist-generated
+r/configs/toolbox.yaml linguist-generated

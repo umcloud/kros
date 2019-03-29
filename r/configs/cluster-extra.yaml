@@ -1,0 +1,12 @@
+    nodes:
+    - name: um-krosk-01
+      directories:
+      - path: /srv/ceph/ceph1
+      - path: /srv/ceph/ceph0
+    - name: um-krosk-02
+      directories:
+      - path: /srv/ceph/ceph1
+      - path: /srv/ceph/ceph0
+    - name: um-krosk-03
+      directories:
+      - path: /srv/ceph/ceph0
