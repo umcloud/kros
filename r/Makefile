@@ -1,4 +1,3 @@
-include ../Makefile.common
 ROOK_REPO=$(REPO_DIR)/rook
 ROOK_MANIFESTS=$(ROOK_REPO)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox}.yaml
 
@@ -7,6 +6,8 @@ help:
 	@echo make diff
 	@echo make deploy
 	@echo make show
+
+include ../Makefile.common
 
 prep: debug git-clone configs-copy
 	./scripts/10-do-prep.sh $(CURDIR)/configs/cluster.yaml $(CURDIR)/configs/cluster-all.yaml $(NODES)
@@ -31,10 +32,3 @@ gen-nodes:
 git-clone: REPO=https://github.com/rook/rook
 git-clone:
 	@cd $(REPO_DIR); test -d $(ROOK_REPO) && echo "Already cloned: $(REPO) into $(ROOK_REPO)" && exit 0; git clone --depth=1 $(REPO) $(ROOK_REPO)
-debug:
-	@echo "# DEBUG:"
-	@echo ROOT_DIR="$(ROOT_DIR)"
-	@echo REPO_DIR="$(REPO_DIR)"
-	@echo NODES=\"$(NODES)\"
-	@echo NODES_IPS=\"$(NODES_IPS)\"
-
