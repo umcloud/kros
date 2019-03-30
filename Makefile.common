@@ -14,12 +14,14 @@ NODES=$(shell bash -c 'printf "%s\n" $(HOST_PREFIX)$(HOST_CNT)')
 NODES_IPS=$(shell bash -c 'printf "%s\n" $(NODES)|xargs -l1 host|sed "s/.*address //"|xargs')
 # Get parent dir of this Makefile.common is the ROOT_DIR
 ROOT_DIR=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-REPO_DIR=$(ROOT_DIR)/repos
+REPO_ROOT=$(ROOT_DIR)/repos
 
 debug:
 	@echo "# DEBUG:"
 	@echo ROOT_DIR="$(ROOT_DIR)"
-	@echo REPO_DIR="$(REPO_DIR)"
+	@echo REPO_ROOT="$(REPO_ROOT)"
 	@echo NODES=\"$(NODES)\"
 	@echo NODES_IPS=\"$(NODES_IPS)\"
 
+git-clone:
+	@test -d $(REPO_DIR) && echo "Already cloned: $(REPO) into $(REPO_DIR)" && exit 0; git clone --depth=1 $(REPO) $(REPO_DIR)
