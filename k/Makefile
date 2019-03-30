@@ -33,7 +33,7 @@ inventory: inventory-prep
 diff:
 	git diff configs/
 
-cluster: inventory
+cluster:
 	source .venv/bin/activate && cd $(REPO_DIR) && \
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml cluster.yml
 
