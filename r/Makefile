@@ -3,7 +3,6 @@ REPO_DIR=$(REPO_ROOT)/rook
 
 ROOK_MANIFESTS=$(REPO_DIR)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox}.yaml
 
-
 help:
 	@echo make prep
 	@echo make diff
@@ -12,8 +11,10 @@ help:
 
 include ../Makefile.common
 
-prep: debug git-clone configs-copy
-	./scripts/10-do-prep.sh $(CURDIR)/configs/cluster.yaml $(CURDIR)/configs/cluster-all.yaml $(NODES)
+prep: debug git-clone do-prep
+
+do-prep:
+	./scripts/10-do-prep.sh $(REPO_DIR)/cluster/examples/kubernetes/ceph $(CURDIR)/configs $(NODES)
 
 diff:
 	git diff configs/
@@ -24,9 +25,6 @@ deploy:
 show:
 	./scripts/30-do-show.sh ceph status
 	./scripts/30-do-show.sh ceph osd tree
-
-configs-copy:
-	cp -pv -t ./configs $(ROOK_MANIFESTS)
 
 gen-nodes:
 	@./scripts/generate-nodes.sh $(NODES)
