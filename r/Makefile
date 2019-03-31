@@ -4,11 +4,11 @@ REPO_DIR=$(REPO_ROOT)/rook
 MANIFESTS_DIR=$(REPO_DIR)/cluster/examples/kubernetes/ceph
 
 help:
-	@echo make prep
-	@echo make diff
-	@echo make deploy
-	@echo make show
-	@echo make tests
+	@echo "make prep     # Clone rook repo, prepara manifests at configs/"
+	@echo "make tests    # Run unit-tests that would spot bad manifests mangling"
+	@echo "make diff     # Show manifests diffs"
+	@echo "make deploy   # Deploy Rook (from scratch, or on top of existing)"
+	@echo "make show     # Show ceph status and alike"
 
 include ../Makefile.common
 
