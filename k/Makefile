@@ -7,6 +7,7 @@ help:
 	@echo "make init"
 	@echo "make inventory"
 	@echo "make diff"
+	@echo "make tests"
 	@echo "make cluster"
 
 include ../Makefile.common
@@ -38,7 +39,7 @@ cluster:
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml cluster.yml
 
 tests:
-	$(MAKE) -C tests REPO_DIR=$(REPO_DIR) NODES="$(NODES)"
+	test -d .venv && source .venv/bin/activate; $(MAKE) -C tests REPO_DIR=$(REPO_DIR) NODES="$(NODES)"
 
 kubectl:
 	ssh ubuntu@$(MASTER) "sudo cp /etc/kubernetes/admin.conf ~ && sudo chmod 644 admin.conf"
