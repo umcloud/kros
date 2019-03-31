@@ -25,3 +25,5 @@ debug:
 
 git-clone:
 	@test -d $(REPO_DIR) && echo "Already cloned: $(REPO) into $(REPO_DIR)" && exit 0; git clone --depth=1 $(REPO) $(REPO_DIR)
+
+.PHONY: debug git-clone

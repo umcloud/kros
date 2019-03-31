@@ -29,3 +29,9 @@ Where:
   deploy, it's essentially `kubectl apply -f ...` over configs/
   manifests
 * `make show` will do e.g. `ceph status` using deployed rook _toolbox_
+
+## Unittests
+
+To run simple YAML unitests to cover `cluster.yaml` manipulation, do
+
+    make tests
