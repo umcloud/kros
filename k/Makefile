@@ -37,6 +37,9 @@ cluster:
 	source .venv/bin/activate && cd $(REPO_DIR) && \
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml cluster.yml
 
+tests:
+	$(MAKE) -C tests REPO_DIR=$(REPO_DIR) NODES="$(NODES)"
+
 kubectl:
 	ssh ubuntu@$(MASTER) "sudo cp /etc/kubernetes/admin.conf ~ && sudo chmod 644 admin.conf"
 	mkdir -p ~/.kube
@@ -73,3 +76,5 @@ K8SCONF=configs/
 SHELL:= /bin/bash
 KBCTL=kubectl --insecure-skip-tls-verify --kubeconfig ./admin.conf
 HELM=KUBECONFIG=./admin.conf helm
+
+.PHONY: init inventory diff cluster tests
