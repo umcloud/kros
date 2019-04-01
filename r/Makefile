@@ -1,5 +1,8 @@
-ROOK_REPO=$(REPO_DIR)/rook
-ROOK_MANIFESTS=$(ROOK_REPO)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox}.yaml
+REPO=https://github.com/rook/rook
+REPO_DIR=$(REPO_ROOT)/rook
+
+ROOK_MANIFESTS=$(REPO_DIR)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox}.yaml
+
 
 help:
 	@echo make prep
@@ -28,7 +31,3 @@ configs-copy:
 gen-nodes:
 	@./scripts/generate-nodes.sh $(NODES)
 
-# Set REPO to use for cloning
-git-clone: REPO=https://github.com/rook/rook
-git-clone:
-	@cd $(REPO_DIR); test -d $(ROOK_REPO) && echo "Already cloned: $(REPO) into $(ROOK_REPO)" && exit 0; git clone --depth=1 $(REPO) $(ROOK_REPO)
