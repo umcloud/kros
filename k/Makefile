@@ -7,6 +7,7 @@ help:
 	@echo "make init"
 	@echo "make inventory"
 	@echo "make diff"
+	@echo "make tests"
 	@echo "make cluster"
 
 include ../Makefile.common
@@ -36,6 +37,9 @@ diff:
 cluster:
 	source .venv/bin/activate && cd $(REPO_DIR) && \
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml cluster.yml
+
+tests:
+	test -d .venv && source .venv/bin/activate; $(MAKE) -C tests REPO_DIR=$(REPO_DIR) NODES="$(NODES)"
 
 kubectl:
 	ssh ubuntu@$(MASTER) "sudo cp /etc/kubernetes/admin.conf ~ && sudo chmod 644 admin.conf"
@@ -73,3 +77,5 @@ K8SCONF=configs/
 SHELL:= /bin/bash
 KBCTL=kubectl --insecure-skip-tls-verify --kubeconfig ./admin.conf
 HELM=KUBECONFIG=./admin.conf helm
+
+.PHONY: init inventory diff cluster tests

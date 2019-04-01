@@ -1,0 +1,7 @@
+    nodes:
+    - name: foo
+      directories:
+      - path: /proc
+    - name: bar
+      directories:
+      - path: /proc
