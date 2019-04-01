@@ -1,0 +1,25 @@
+SHELL=/bin/bash
+# Common variables to use in other subdirs Makefile-s as e.g.
+# include ../Makefile.common, note that this include must come
+# *after* main target (which should be `help:`)
+
+# Note that below must start at 01... as
+# kubespray/contrib/inventory_builder/inventory.py will still start its node
+# naming from "1" (even if below was set e.g. to {101..110}).
+HOST_CNT={01..04}
+HOST_PREFIX=um-krosk-
+MASTER=$(HOST_PREFIX)01
+
+NODES=$(shell bash -c 'printf "%s\n" $(HOST_PREFIX)$(HOST_CNT)')
+NODES_IPS=$(shell bash -c 'printf "%s\n" $(NODES)|xargs -l1 host|sed "s/.*address //"|xargs')
+# Get parent dir of this Makefile.common is the ROOT_DIR
+ROOT_DIR=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+REPO_DIR=$(ROOT_DIR)/repos
+
+debug:
+	@echo "# DEBUG:"
+	@echo ROOT_DIR="$(ROOT_DIR)"
+	@echo REPO_DIR="$(REPO_DIR)"
+	@echo NODES=\"$(NODES)\"
+	@echo NODES_IPS=\"$(NODES_IPS)\"
+
