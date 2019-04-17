@@ -34,7 +34,7 @@ all: init prep creds tests deploy
 # Steps from https://docs.openstack.org/openstack-helm/latest/install/multinode/kubernetes-and-common-setup.html
 init: git-clone-openstack-helm git-clone-openstack-helm-infra install-venv
 
-prep: package-infra-charts helm-serve package-osh-charts label-kube-nodes
+prep: helm-serve package-infra-charts package-osh-charts label-kube-nodes
 	sudo install -m 0700 -o $$(id -nu) -d /etc/openstack
 
 creds: os-charts-values setup-client
