@@ -34,7 +34,7 @@ all: init prep creds tests deploy
 # Steps from https://docs.openstack.org/openstack-helm/latest/install/multinode/kubernetes-and-common-setup.html
 init: git-clone-openstack-helm git-clone-openstack-helm-infra install-venv
 
-prep: helm-serve package-infra-charts package-osh-charts label-kube-nodes
+prep: check-helm-bin helm-serve package-infra-charts package-osh-charts label-kube-nodes
 	sudo install -m 0700 -o $$(id -nu) -d /etc/openstack
 
 creds: os-charts-values setup-client
@@ -108,6 +108,10 @@ os-test-bad-passwords:
 # Package all openstack-help-infra charts
 package-infra-charts:
 	$(MAKE) -C $(REPO_ROOT)/openstack-helm-infra all
+
+# Verify whem in path, newer openstack-helm charts need v2.13+
+check-helm-bin:
+	helm version -c --short|egrep 'v2[.]1[3-9]'
 
 # Packaged infra charts need to be locally available to
 # package main openstack-helm charts: run 'helm serve'
