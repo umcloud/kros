@@ -1,0 +1,74 @@
+# openstack-helm defaults to 'general' SC, change to null to use default
+volume:
+  class_name: null
+storage:
+  pvc:
+    class_name: null
+endpoints:
+# TODO(jjo): replacing cluster.local -> cloud.um.edu.ar: will need to TEST and redeploy kubespray with this domain
+#  cluster_domain_suffix: cloud.um.edu.ar
+# mariadb
+  oslo_db:
+    auth:
+      admin:
+        password: ${OSH_MARIADB_ADMIN_PASSWORD}
+      # TODO(jjo): diff pass
+      sst:
+        password: ${OSH_MARIADB_ADMIN_PASSWORD}
+      keystone:
+        password: ${KEYSTONE_DB_PASSWORD}
+      glance:
+        password: ${GLANCE_DB_PASSWORD}
+      cinder:
+        password: ${CINDER_DB_PASSWORD}
+      neutron:
+        password: ${NEUTRON_DB_PASSWORD}
+      nova:
+        password: ${NOVA_DB_PASSWORD}
+      heat:
+        password: ${HEAT_DB_PASSWORD}
+# rabbitmq
+  oslo_messaging:
+    auth:
+      admin:
+        password: ${RABBITMQ_ADMIN_PASSWORD}
+      user:
+        password: ${RABBITMQ_ADMIN_PASSWORD}
+      keystone:
+        password: ${KEYSTONE_RABBITMQ_USER_PASSWORD}
+      neutron:
+        password: ${NEUTRON_RABBITMQ_USER_PASSWORD}
+      nova:
+        password: ${NOVA_RABBITMQ_USER_PASSWORD}
+      heat:
+        password: ${HEAT_RABBITMQ_USER_PASSWORD}
+# keystone
+  identity:
+    auth:
+      admin:
+        password: ${KEYSTONE_ADMIN_PASSWORD}
+      # TODO(jjo): diff pass
+      test:
+        password: ${KEYSTONE_ADMIN_PASSWORD}
+      glance:
+        password: ${GLANCE_USER_PASSWORD}
+      cinder:
+        password: ${CINDER_USER_PASSWORD}
+      neutron:
+        password: ${NEUTRON_USER_PASSWORD}
+      nova:
+        password: ${NOVA_USER_PASSWORD}
+      placement:
+        password: ${NOVA_PLACEMENT_USER_PASSWORD}
+      heat:
+        password: ${HEAT_USER_PASSWORD}
+      heat_trustee:
+        password: ${HEAT_TRUSTEE_PASSWORD}
+      heat_stack_user:
+        password: ${HEAT_STACK_PASSWORD}
+      swift:
+        password: ${SWIFT_USER_PASSWORD}
+# memcache
+  oslo_cache:
+    auth:
+      memcache_secret_key: ${KEYSTONE_AUTHTOKEN_MEMCACHED_SECRET_KEY}
