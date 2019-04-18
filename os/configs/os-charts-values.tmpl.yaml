@@ -1,3 +1,9 @@
+# openstack-helm defaults to 'general' SC, change to null to use default
+volume:
+  class_name: null
+storage:
+  pvc:
+    class_name: null
 endpoints:
 # TODO(jjo): replacing cluster.local -> cloud.um.edu.ar: will need to TEST and redeploy kubespray with this domain
 #  cluster_domain_suffix: cloud.um.edu.ar
@@ -24,8 +30,12 @@ endpoints:
 # rabbitmq
   oslo_messaging:
     auth:
+      admin:
+        password: ${RABBITMQ_ADMIN_PASSWORD}
       user:
         password: ${RABBITMQ_ADMIN_PASSWORD}
+      keystone:
+        password: ${KEYSTONE_RABBITMQ_USER_PASSWORD}
       neutron:
         password: ${NEUTRON_RABBITMQ_USER_PASSWORD}
       nova:
