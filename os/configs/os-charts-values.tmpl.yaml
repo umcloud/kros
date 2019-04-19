@@ -27,6 +27,18 @@ endpoints:
         password: ${NOVA_DB_PASSWORD}
       heat:
         password: ${HEAT_DB_PASSWORD}
+  oslo_db_api:
+    auth:
+      admin:
+        password: ${OSH_MARIADB_ADMIN_PASSWORD}
+      nova:
+        password: ${NOVA_DB_PASSWORD}
+  oslo_db_cell0:
+    auth:
+      admin:
+        password: ${OSH_MARIADB_ADMIN_PASSWORD}
+      nova:
+        password: ${NOVA_DB_PASSWORD}
 # rabbitmq
   oslo_messaging:
     auth:
@@ -72,3 +84,8 @@ endpoints:
   oslo_cache:
     auth:
       memcache_secret_key: ${KEYSTONE_AUTHTOKEN_MEMCACHED_SECRET_KEY}
+# neutron
+# TODO(jjo): use makefile var, e.g. NEUTRON_BR_EX_IFACE=enp5s0
+conf:
+  auto_bridge_add:
+    br-ex: enp5s0
