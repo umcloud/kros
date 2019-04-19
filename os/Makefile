@@ -4,11 +4,18 @@ SETUP_VENV=pyvenv .venv
 USE_VENV=source .venv/bin/activate
 TEST_VENV=test -f .venv/bin/activate
 
+# TODO(jjo): get from chart vars, should be svc.umcloud.local
+OS_DOMAIN=openstack.svc.cluster.local
+KEYSTONE_FQDN=keystone.$(OS_DOMAIN)
+KEYSTONE_FQDN_HOSTS=$(KEYSTONE_FQDN) $(shell echo {keystone,cinder,glance,neutron,nova,placement,heat}{,-api}.$(OS_DOMAIN))
+
 # DEPLOY_TYPE can be: developer/common (dev) or multinode (prod)
-#DEPLOY_TYPE=multinode
-DEPLOY_TYPE=developer/common
+DEPLOY_TYPE=multinode
+#DEPLOY_TYPE=developer/common
 # TODO(jjo): adapt ceph stuff to Rook
-DEPLOY_GREP='mariadb|rabbitmq|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|ceph-radosgateway'
+# NOTE: compute-kit includes: nova, neutron
+# F_ck... it REALLY wants its own ingress (!): installs in kube-system *and* openstack NS ("ingress" Pods)
+DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|ceph-radosgateway'
 # @navarrow won't let me go without horizon ...
 DEPLOY_SCRIPTS_PATT=$(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]*
 DEPLOY_SCRIPTS_EXTRA=$(REPO_ROOT)/openstack-helm/tools/deployment/developer/common/100-horizon.sh
@@ -61,8 +68,17 @@ $(OPENSTACK_CLOUDS): $(OSH_PASSWORDS_ENV)
 # then all nodes for nova (and needed openvswitch)
 label-kube-nodes:
 	kubectl label nodes openstack-control-plane=enabled -l node-role.kubernetes.io/master --overwrite
-	kubectl label nodes openstack-helm-node-class=primary --all --overwrite
+	kubectl label nodes openstack-helm-node-class=primary -l node-role.kubernetes.io/master --overwrite
+	kubectl label nodes openstack-compute-node=enabled --all --overwrite
 	kubectl label nodes openvswitch=enabled --all --overwrite
+
+hack-etc-hosts:
+	$(eval INGRESS_IP=$(shell kubectl get svc -n ingress-nginx ingress-nginx -ojsonpath='{.status.loadBalancer.ingress[0].ip}'))
+	@test $(INGRESS_IP) != ""
+	egrep $(KEYSTONE_FQDN) /etc/hosts && \
+		sudo sed -i.bak '/$(KEYSTONE_FQDN)/s/.*/$(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS)/' /etc/hosts || \
+		{ echo $(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS) | sudo tee -a /etc/hosts; }
+
 
 $(CHARTS_VALUES_YAML): configs/os-charts-values.tmpl.yaml $(OSH_PASSWORDS_ENV) Makefile
 	. $(OSH_PASSWORDS_ENV) && envsubst < $(<) > $(@)
@@ -73,10 +89,14 @@ $(OSH_PASSWORDS_ENV):
 # Do the actual deploy by running DEPLOY_SCRIPTS in sequence,
 # DEPLOY_SCRIPTS is filtered-in for only the components we want
 # to deploy
+# Need to void NETWORK_TUNNEL_DEV=<local_default_route_interface> to avoid using this *local*
+# iface on cluster nodes (wtf?)
 os-deploy:
 	@echo "Deploying for DEPLOY_TYPE=$(DEPLOY_TYPE) ..."
 	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
-		for i in $(DEPLOY_SCRIPTS); do (set -x; echo "=== $$i ==="; env PS4='=== ' $$i); done
+		for i in $(DEPLOY_SCRIPTS); do \
+		(echo "=== $$i ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' $$i | env PS4='=== ' bash); \
+		done
 
 # Run 'helm template' instead on each chart, to peek
 # at the generated YAML output for the deploy
@@ -103,6 +123,7 @@ os-test-bad-passwords:
 	@echo 'Showing charts configured with secrets as "password"[sic]'
 	$(eval PASSWORD_B64=$(shell echo -n password|base64))
 	($(MAKE) os-template | egrep -v OS_AUTH_TYPE: | egrep -B5 '$(PASSWORD_B64)' >&2) 2>&1; [ $$? -ne 0 ]
+	($(MAKE) os-template | sed -rn 's/  .+_CONNECTION:.//p'|xargs -I@ sh -c 'echo @|base64 -d;echo' | egrep '$(PASSWORD_B64)' >&2); [ $$? -ne 0 ]
 	@echo PASS
 
 # Package all openstack-help-infra charts
@@ -131,7 +152,8 @@ package-osh-charts:
 # PVs will persist, also creds are not resetted so a new deploy
 # should work.
 os-destroy:
-	helm ls --namespace=openstack -q|xargs -r helm delete --purge
+	helm ls --namespace=openstack -q|xargs -tr helm delete --purge
+	kubectl delete job,pod,cm --namespace=openstack --all --grace-period=1
 
 # DANGER: this will completely destroy the openstack deploy,
 # including its PVs (deleting the NS) and the credentials

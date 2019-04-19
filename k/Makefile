@@ -57,7 +57,7 @@ helm: certmanager
 	$(HELM) init
 	$(HELM) ls --all
 
-nginx-ingress: helm
+nginx-ingress:
 	$(KBCTL) apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/mandatory.yaml
 	$(KBCTL) apply -f $(K8SCONF)cloud-generic.yaml
 
@@ -71,5 +71,5 @@ openebs:
 
 K8SCONF=configs/
 SHELL:= /bin/bash
-KBCTL=kubectl --insecure-skip-tls-verify --kubeconfig ./admin.conf
+KBCTL=kubectl --insecure-skip-tls-verify
 HELM=KUBECONFIG=./admin.conf helm

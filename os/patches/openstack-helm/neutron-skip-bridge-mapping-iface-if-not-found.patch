@@ -1,0 +1,26 @@
+diff --git a/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl b/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
+index 71a2b6b..849bc90 100644
+--- a/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
++++ b/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
+@@ -29,7 +29,7 @@ do
+   ip link add name $bridge type bridge
+   set -e
+   ip link set dev $bridge up
+-  if [ -n "$iface" ] && [ "$iface" != "null" ]
++  if [ -n "$iface" ] && [ "$iface" != "null" ] && ip link show ${iface} >/dev/null
+   then
+     ip link set dev $iface  master $bridge
+   fi
+diff --git a/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl b/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
+index 4dfb0ff..19536bd 100644
+--- a/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
++++ b/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
+@@ -42,7 +42,7 @@ do
+   bridge=${bmap%:*}
+   iface=${bmap#*:}
+   ovs-vsctl --no-wait --may-exist add-br $bridge
+-  if [ -n "$iface" ] && [ "$iface" != "null" ]
++  if [ -n "$iface" ] && [ "$iface" != "null" ] && ip link show ${iface} >/dev/null
+   then
+     ovs-vsctl --no-wait --may-exist add-port $bridge $iface
+     ip link set dev $iface up
