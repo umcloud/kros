@@ -4,8 +4,16 @@ SETUP_VENV=pyvenv .venv
 USE_VENV=source .venv/bin/activate
 TEST_VENV=test -f .venv/bin/activate
 
+SVC_CLUSTER=svc.cluster.local
+
+# Ceph integration
+ROOK_CEPH_NS=rook-ceph
+ROOK_CEPH_NS_FQDN=$(ROOK_CEPH_NS).$(SVC_CLUSTER)
+CEPH_ADMIN_KEYRING_ENV=/etc/openstack/ceph-admin-keyring.env
+
 # TODO(jjo): get from chart vars, should be svc.umcloud.local
-OS_DOMAIN=openstack.svc.cluster.local
+OS_DOMAIN=openstack.$(SVC_CLUSTER)
+
 KEYSTONE_FQDN=keystone.$(OS_DOMAIN)
 KEYSTONE_FQDN_HOSTS=$(KEYSTONE_FQDN) $(shell echo {keystone,cinder,glance,neutron,nova,placement,heat}{,-api}.$(OS_DOMAIN))
 
@@ -15,7 +23,8 @@ DEPLOY_TYPE=multinode
 # TODO(jjo): adapt ceph stuff to Rook
 # NOTE: compute-kit includes: nova, neutron
 # F_ck... it REALLY wants its own ingress (!): installs in kube-system *and* openstack NS ("ingress" Pods)
-DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|ceph-radosgateway'
+DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|Xceph-radosgateway|horizon'
+
 # @navarrow won't let me go without horizon ...
 DEPLOY_SCRIPTS_PATT=$(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]*
 DEPLOY_SCRIPTS_EXTRA=$(REPO_ROOT)/openstack-helm/tools/deployment/developer/common/100-horizon.sh
@@ -41,7 +50,7 @@ all: init prep creds tests deploy
 # Steps from https://docs.openstack.org/openstack-helm/latest/install/multinode/kubernetes-and-common-setup.html
 init: git-clone-openstack-helm git-clone-openstack-helm-infra install-venv
 
-prep: check-helm-bin helm-serve package-infra-charts package-osh-charts label-kube-nodes
+prep: check-helm-bin helm-serve package-infra-charts package-osh-charts label-kube-nodes ceph-client-conf
 	sudo install -m 0700 -o $$(id -nu) -d /etc/openstack
 
 creds: os-charts-values setup-client
@@ -69,8 +78,14 @@ $(OPENSTACK_CLOUDS): $(OSH_PASSWORDS_ENV)
 label-kube-nodes:
 	kubectl label nodes openstack-control-plane=enabled -l node-role.kubernetes.io/master --overwrite
 	kubectl label nodes openstack-helm-node-class=primary -l node-role.kubernetes.io/master --overwrite
+	kubectl label nodes ceph-rgw=enabled -l node-role.kubernetes.io/master --overwrite
 	kubectl label nodes openstack-compute-node=enabled --all --overwrite
 	kubectl label nodes openvswitch=enabled --all --overwrite
+
+ceph-client-conf: $(CEPH_ADMIN_KEYRING_ENV)
+	kubectl create cm --namespace=openstack ceph-etc --dry-run --from-file=configs/ceph-etc -oyaml | ROOK_CEPH_NS_FQDN=$(ROOK_CEPH_NS_FQDN) envsubst | kubectl apply -f-
+	@# used-by: glance (secret/pvc-ceph-client-key)
+	. $(CEPH_ADMIN_KEYRING_ENV) && kubectl create secret generic --namespace=openstack pvc-ceph-client-key --dry-run --from-literal=key=$${CEPH_ADMIN_KEYRING:?} -oyaml  | kubectl apply -f-
 
 hack-etc-hosts:
 	$(eval INGRESS_IP=$(shell kubectl get svc -n ingress-nginx ingress-nginx -ojsonpath='{.status.loadBalancer.ingress[0].ip}'))
@@ -79,19 +94,27 @@ hack-etc-hosts:
 		sudo sed -i.bak '/$(KEYSTONE_FQDN)/s/.*/$(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS)/' /etc/hosts || \
 		{ echo $(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS) | sudo tee -a /etc/hosts; }
 
-
-$(CHARTS_VALUES_YAML): configs/os-charts-values.tmpl.yaml $(OSH_PASSWORDS_ENV) Makefile
-	. $(OSH_PASSWORDS_ENV) && envsubst < $(<) > $(@)
+$(CHARTS_VALUES_YAML): configs/os-charts-values.tmpl.yaml $(OSH_PASSWORDS_ENV) $(CEPH_ADMIN_KEYRING_ENV) Makefile
+	. $(OSH_PASSWORDS_ENV) && . $(CEPH_ADMIN_KEYRING_ENV) && envsubst < $(<) > $(@)
 
 $(OSH_PASSWORDS_ENV):
 	sed -e '/set -xe/d' -e 's|/tmp/osh-passwords.env|$(OSH_PASSWORDS_ENV)|' $(REPO_ROOT)/openstack-helm/tools/deployment/armada/generate-osh-passwords.sh| bash
+
+$(CEPH_ADMIN_KEYRING_ENV): Makefile
+	$(eval CEPH_ADMIN_KEYRING=$(shell kubectl get secrets --namespace=$(ROOK_CEPH_NS) rook-ceph-admin-keyring -ojsonpath='{.data.keyring}' | base64 -d | sed -rn 's/.*key.=.//p'))
+	test -n "$(CEPH_ADMIN_KEYRING)" && \
+		printf "export %s\n" \
+			"CEPH_ADMIN_KEYRING=$(CEPH_ADMIN_KEYRING)" \
+			"ROOK_CEPH_NS_FQDN=$(ROOK_CEPH_NS_FQDN)" \
+			"ROOK_CEPH_NS=$(ROOK_CEPH_NS)" \
+			> $(@)
 
 # Do the actual deploy by running DEPLOY_SCRIPTS in sequence,
 # DEPLOY_SCRIPTS is filtered-in for only the components we want
 # to deploy
 # Need to void NETWORK_TUNNEL_DEV=<local_default_route_interface> to avoid using this *local*
 # iface on cluster nodes (wtf?)
-os-deploy:
+os-deploy: creds ceph-client-conf
 	@echo "Deploying for DEPLOY_TYPE=$(DEPLOY_TYPE) ..."
 	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
 		for i in $(DEPLOY_SCRIPTS); do \
