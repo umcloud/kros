@@ -1,13 +1,39 @@
+---
+conf:
+  # used-by: neutron
+  # TODO(jjo): use makefile var, e.g. NEUTRON_BR_EX_IFACE=enp5s0
+  auto_bridge_add:
+    br-ex: enp5s0
+  ceph:
+    admin:
+      keyring: ${CEPH_ADMIN_KEYRING}
+    pools:
+      volume:
+        crush_rule: replicated_ruleset
+  global:
+    mon_host: rook-ceph-mon-a.${ROOK_CEPH_NS_FQDN}
+  pool:
+    default:
+      crush_rule: replicated_ruleset
+  glance:
+    glance_store:
+      rbd_store_crush_rule: replicated_ruleset
+
 # openstack-helm defaults to 'general' SC, change to null to use default
+# used-by: mariadb, cinder, glance
 volume:
   class_name: null
-storage:
-  pvc:
-    class_name: null
+
+storage: rbd
+
 endpoints:
-# TODO(jjo): replacing cluster.local -> cloud.um.edu.ar: will need to TEST and redeploy kubespray with this domain
-#  cluster_domain_suffix: cloud.um.edu.ar
-# mariadb
+  ceph_mon:
+    namespace: ${ROOK_CEPH_NS}
+    hosts:
+      default: rook-ceph-mon-a
+  # TODO(jjo): replacing cluster.local -> cloud.um.edu.ar:
+  #            will need to TEST and redeploy kubespray with this domain
+  #  cluster_domain_suffix: cloud.um.edu.ar
   oslo_db:
     auth:
       admin:
@@ -39,7 +65,7 @@ endpoints:
         password: ${OSH_MARIADB_ADMIN_PASSWORD}
       nova:
         password: ${NOVA_DB_PASSWORD}
-# rabbitmq
+  # rabbitmq
   oslo_messaging:
     auth:
       admin:
@@ -54,7 +80,7 @@ endpoints:
         password: ${NOVA_RABBITMQ_USER_PASSWORD}
       heat:
         password: ${HEAT_RABBITMQ_USER_PASSWORD}
-# keystone
+  # keystone
   identity:
     auth:
       admin:
@@ -80,12 +106,7 @@ endpoints:
         password: ${HEAT_STACK_PASSWORD}
       swift:
         password: ${SWIFT_USER_PASSWORD}
-# memcache
+  # memcache
   oslo_cache:
     auth:
       memcache_secret_key: ${KEYSTONE_AUTHTOKEN_MEMCACHED_SECRET_KEY}
-# neutron
-# TODO(jjo): use makefile var, e.g. NEUTRON_BR_EX_IFACE=enp5s0
-conf:
-  auto_bridge_add:
-    br-ex: enp5s0
