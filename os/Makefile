@@ -13,6 +13,7 @@ CEPH_ADMIN_KEYRING_ENV=/etc/openstack/ceph-admin-keyring.env
 
 # TODO(jjo): get from chart vars, should be svc.umcloud.local
 OS_DOMAIN=openstack.$(SVC_CLUSTER)
+
 KEYSTONE_FQDN=keystone.$(OS_DOMAIN)
 KEYSTONE_FQDN_HOSTS=$(KEYSTONE_FQDN) $(shell echo {keystone,cinder,glance,neutron,nova,placement,heat}{,-api}.$(OS_DOMAIN))
 
@@ -23,6 +24,7 @@ DEPLOY_TYPE=multinode
 # NOTE: compute-kit includes: nova, neutron
 # F_ck... it REALLY wants its own ingress (!): installs in kube-system *and* openstack NS ("ingress" Pods)
 DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|Xceph-radosgateway|horizon'
+
 # @navarrow won't let me go without horizon ...
 DEPLOY_SCRIPTS_PATT=$(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]*
 DEPLOY_SCRIPTS_EXTRA=$(REPO_ROOT)/openstack-helm/tools/deployment/developer/common/100-horizon.sh
@@ -91,7 +93,6 @@ hack-etc-hosts:
 	egrep $(KEYSTONE_FQDN) /etc/hosts && \
 		sudo sed -i.bak '/$(KEYSTONE_FQDN)/s/.*/$(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS)/' /etc/hosts || \
 		{ echo $(INGRESS_IP) $(KEYSTONE_FQDN_HOSTS) | sudo tee -a /etc/hosts; }
-
 
 $(CHARTS_VALUES_YAML): configs/os-charts-values.tmpl.yaml $(OSH_PASSWORDS_ENV) $(CEPH_ADMIN_KEYRING_ENV) Makefile
 	. $(OSH_PASSWORDS_ENV) && . $(CEPH_ADMIN_KEYRING_ENV) && envsubst < $(<) > $(@)
