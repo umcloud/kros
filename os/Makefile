@@ -26,9 +26,9 @@ DEPLOY_TYPE=multinode
 DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|Xceph-radosgateway|horizon'
 
 # @navarrow won't let me go without horizon ...
-DEPLOY_SCRIPTS_PATT=$(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]*
-DEPLOY_SCRIPTS_EXTRA=$(REPO_ROOT)/openstack-helm/tools/deployment/developer/common/100-horizon.sh
-DEPLOY_SCRIPTS=$(shell ls $(DEPLOY_SCRIPTS_PATT) $(DEPLOY_SCRIPTS_EXTRA)|sort -u | egrep $(DEPLOY_GREP))
+DEPLOY_SCRIPTS_BASE=$(shell ls $(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]* |egrep $(DEPLOY_GREP))
+DEPLOY_SCRIPTS_EXTRA=$(shell ls $(REPO_ROOT)/openstack-helm/tools/deployment/developer/common/100-horizon.sh | egrep $(DEPLOY_GREP))
+DEPLOY_SCRIPTS=$(DEPLOY_SCRIPTS_BASE) $(DEPLOY_SCRIPTS_EXTRA)
 OSH_PASSWORDS_ENV=/etc/openstack/osh-passwords.env
 OPENSTACK_CLOUDS=/etc/openstack/clouds.yaml
 CHARTS_VALUES_YAML=/etc/openstack/os-charts-values.yaml
@@ -50,14 +50,16 @@ all: init prep creds tests deploy
 # Steps from https://docs.openstack.org/openstack-helm/latest/install/multinode/kubernetes-and-common-setup.html
 init: git-clone-openstack-helm git-clone-openstack-helm-infra install-venv
 
-prep: check-helm-bin helm-serve package-infra-charts package-osh-charts label-kube-nodes ceph-client-conf
-	sudo install -m 0700 -o $$(id -nu) -d /etc/openstack
+prep: etc-openstack check-helm-bin helm-serve package-infra-charts package-osh-charts label-kube-nodes ceph-client-conf
 
-creds: os-charts-values setup-client
+creds: etc-openstack os-charts-values setup-client
 
 tests: os-test-bad-passwords
 
 deploy: os-deploy
+
+etc-openstack:
+	sudo install -m 0700 -o $$(id -nu) -d /etc/openstack
 
 setup-client: $(OPENSTACK_CLOUDS)
 os-charts-values: $(CHARTS_VALUES_YAML)
@@ -76,16 +78,37 @@ $(OPENSTACK_CLOUDS): $(OSH_PASSWORDS_ENV)
 # Will use same kubernetes master nodes for openstack-control-plane,
 # then all nodes for nova (and needed openvswitch)
 label-kube-nodes:
-	kubectl label nodes openstack-control-plane=enabled -l node-role.kubernetes.io/master --overwrite
+	#kubectl label nodes openstack-control-plane=enabled -l node-role.kubernetes.io/master --overwrite
+	kubectl label nodes openstack-control-plane=enabled --all --overwrite
 	kubectl label nodes openstack-helm-node-class=primary -l node-role.kubernetes.io/master --overwrite
 	kubectl label nodes ceph-rgw=enabled -l node-role.kubernetes.io/master --overwrite
 	kubectl label nodes openstack-compute-node=enabled --all --overwrite
 	kubectl label nodes openvswitch=enabled --all --overwrite
 
-ceph-client-conf: $(CEPH_ADMIN_KEYRING_ENV)
-	kubectl create cm --namespace=openstack ceph-etc --dry-run --from-file=configs/ceph-etc -oyaml | ROOK_CEPH_NS_FQDN=$(ROOK_CEPH_NS_FQDN) envsubst | kubectl apply -f-
+ceph-client-conf: $(CEPH_ADMIN_KEYRING_ENV) update-ceph-mon-openstack-svc
+	kubectl create ns openstack || true
 	@# used-by: glance (secret/pvc-ceph-client-key)
 	. $(CEPH_ADMIN_KEYRING_ENV) && kubectl create secret generic --namespace=openstack pvc-ceph-client-key --dry-run --from-literal=key=$${CEPH_ADMIN_KEYRING:?} -oyaml  | kubectl apply -f-
+	kubectl get cm -n openstack ceph-etc -ojson | jq -r '.data["ceph.conf"]'
+
+# rook-ceph mon endpoints can change if the rook operator finds
+# the need to replace an outage-d mon, e.g. could switch from mon-a,b,c
+# to mon-d,e,f (with different IPs)
+# Here we add "stable" ceph-mon-0,1,2 ExternalName svcs at the openstack NS,
+# this target will update these to point to *currently* running ones
+update-ceph-mon-openstack-svc:
+	$(MAKE) -s env-ceph-mons ROOK_CEPH_NS=$(ROOK_CEPH_NS) |egrep ^export > configs/ceph-mon-openstack.env
+	. configs/ceph-mon-openstack.env && envsubst < configs/ceph-mon-openstack.yaml | kubectl apply -f-
+	kubectl create cm --namespace=openstack ceph-etc --dry-run --from-file=configs/ceph-etc -oyaml | kubectl apply -f-
+	kubectl get svc -n openstack -l app=ceph-mon
+
+# Show env needed to update ceph-mon-0,1,2 entries from ceph-mon-openstack.yaml as e.g.:
+# export MON_0=rook-ceph-mon-d.rook-ceph.svc.cluster.local
+# export MON_1=rook-ceph-mon-e.rook-ceph.svc.cluster.local
+# export MON_2=rook-ceph-mon-f.rook-ceph.svc.cluster.local
+env-ceph-mons:
+	kubectl get svc -n ${ROOK_CEPH_NS} -l app=${ROOK_CEPH_NS}-mon -l mon -ogo-template='{{range $$i, $$e :=.items}}export MON_{{$$i}}={{.metadata.name}}.{{.metadata.namespace}}.svc.cluster.local{{"\n"}}{{end}}'
+
 
 hack-etc-hosts:
 	$(eval INGRESS_IP=$(shell kubectl get svc -n ingress-nginx ingress-nginx -ojsonpath='{.status.loadBalancer.ingress[0].ip}'))
@@ -115,7 +138,7 @@ $(CEPH_ADMIN_KEYRING_ENV): Makefile
 # Need to void NETWORK_TUNNEL_DEV=<local_default_route_interface> to avoid using this *local*
 # iface on cluster nodes (wtf?)
 os-deploy: creds ceph-client-conf
-	@echo "Deploying for DEPLOY_TYPE=$(DEPLOY_TYPE) ..."
+	@echo "Deploying for DEPLOY_TYPE: $(DEPLOY_TYPE), DEPLOY_SCRIPTS: $(DEPLOY_SCRIPTS) ..."
 	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
 		for i in $(DEPLOY_SCRIPTS); do \
 		(echo "=== $$i ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' $$i | env PS4='=== ' bash); \
