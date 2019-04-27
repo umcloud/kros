@@ -1,0 +1,32 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: ceph-mon-0
+  namespace: openstack
+  labels:
+    app: ceph-mon
+spec:
+  type: ExternalName
+  externalName: ${MON_0}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ceph-mon-1
+  namespace: openstack
+  labels:
+    app: ceph-mon
+spec:
+  type: ExternalName
+  externalName: ${MON_1}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: ceph-mon-2
+  namespace: openstack
+  labels:
+    app: ceph-mon
+spec:
+  type: ExternalName
+  externalName: ${MON_2}

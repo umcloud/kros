@@ -98,7 +98,7 @@ ceph-client-conf: $(CEPH_ADMIN_KEYRING_ENV) update-ceph-mon-openstack-svc
 # this target will update these to point to *currently* running ones
 update-ceph-mon-openstack-svc:
 	$(MAKE) -s env-ceph-mons ROOK_CEPH_NS=$(ROOK_CEPH_NS) |egrep ^export > configs/ceph-mon-openstack.env
-	. configs/ceph-mon-openstack.env && envsubst < configs/ceph-mon-openstack.yaml | kubectl apply -f-
+	. configs/ceph-mon-openstack.env && envsubst < configs/ceph-mon-openstack.tmpl.yaml | kubectl apply -f-
 	kubectl create cm --namespace=openstack ceph-etc --dry-run --from-file=configs/ceph-etc -oyaml | kubectl apply -f-
 	kubectl get svc -n openstack -l app=ceph-mon
 
