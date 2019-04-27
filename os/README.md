@@ -37,6 +37,21 @@ Where:
 
 ## Known issues:
 
+### Calico
+
+Calico CNI firewall rules interfere with VXLAN and GRE tunneling,
+in concrete their packets get `DROP` -ed by `cali-OUTPUT` chain rules.
+
+To workaround these, below rule will ab-use Calico's `ACCEPT` -ed mark
+at `cali-OUTPUT` chain, by applying it to the tunneled packets we want
+to void getting dropped (add it at nodes' initialization scripts):
+
+    /sbin/iptables -t mangle -I OUTPUT -p GRE -j MARK --set-xmark
+    0x10000/0x10000
+
+
 ### ceph-mons
+
+See `update-ceph-mon-openstack-svc` Makefile target.
 
 ### DNS
