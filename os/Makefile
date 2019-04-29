@@ -149,7 +149,7 @@ os-deploy: creds ceph-client-conf
 os-template:
 	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
 		for i in $(DEPLOY_SCRIPTS); do \
-		(sed -r -e '/wait/,$$d' -e 's/helm upgrade --install \S+/helm template/' $$i| env PS4='=== ' bash); \
+		(sed -r -e '/wait/,$$d' -e 's/helm upgrade --install (\S+)/helm template --name \1/' $$i| env PS4='=== ' bash); \
 		done
 # Run 'helm inspect' instead on each chart, to peek
 # on charts' settings.
