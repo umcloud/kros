@@ -52,8 +52,9 @@ to void getting dropped (add it at nodes' initialization scripts):
 ### Crashlooping libvirt-libvirt-default daemonset Pods
 
 One some nodes, depending on their workload, you may find steady
-libvirt crashlooping pods, these log to node's `/var/log/libvirt/libvirtd.log`,
-peeking there you
+libvirt crashlooping pods. These Pods log to hosting node's
+`/var/log/libvirt/libvirtd.log` (host moung), peeking it you'd find
+errors similar to:
 
   2019-04-21 01:51:22.581+0000: 7363: error : virSecurityDriverLookup:80 : unsupported configuration: Security driver apparmor not enabled
   2019-04-21 01:51:22.581+0000: 7363: error : umlStateInitialize:566 : Failed to create inotify watch on /var/run/libvirt/uml-guest: No space left on device
