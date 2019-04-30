@@ -1,0 +1,52 @@
+diff --git a/ceilometer/values.yaml b/ceilometer/values.yaml
+index be5e768..f8f9e72 100644
+--- a/ceilometer/values.yaml
++++ b/ceilometer/values.yaml
+@@ -157,7 +157,7 @@ conf:
+     apache2:
+       binary: apache2
+       start_parameters: -DFOREGROUND
+-      site_dir: /etc/apache2/sites-enable
++      site_dir: /etc/apache2/sites-enabled
+       conf_dir: /etc/apache2/conf-enabled
+       mods_dir: /etc/apache2/mods-available
+       a2enmod: null
+diff --git a/horizon/values.yaml b/horizon/values.yaml
+index 0334f61..40e9df0 100644
+--- a/horizon/values.yaml
++++ b/horizon/values.yaml
+@@ -61,7 +61,7 @@ conf:
+     apache2:
+       binary: apache2
+       start_parameters: -DFOREGROUND
+-      site_dir: /etc/apache2/sites-enable
++      site_dir: /etc/apache2/sites-enabled
+       conf_dir: /etc/apache2/conf-enabled
+       mods_dir: /etc/apache2/mods-available
+       a2enmod:
+diff --git a/keystone/values.yaml b/keystone/values.yaml
+index 8b714cd..e17f1f9 100644
+--- a/keystone/values.yaml
++++ b/keystone/values.yaml
+@@ -521,7 +521,7 @@ conf:
+     apache2:
+       binary: apache2
+       start_parameters: -DFOREGROUND
+-      site_dir: /etc/apache2/sites-enable
++      site_dir: /etc/apache2/sites-enabled
+       conf_dir: /etc/apache2/conf-enabled
+       mods_dir: /etc/apache2/mods-available
+       a2enmod: null
+diff --git a/nova/values.yaml b/nova/values.yaml
+index 324ecb4..6161cdd 100644
+--- a/nova/values.yaml
++++ b/nova/values.yaml
+@@ -530,7 +530,7 @@ conf:
+       binary: apache2
+       start_parameters: -DFOREGROUND
+       conf_dir: /etc/apache2/conf-enabled
+-      site_dir: /etc/apache2/sites-enable
++      site_dir: /etc/apache2/sites-enabled
+       mods_dir: /etc/apache2/mods-available
+       a2enmod: null
+       a2dismod: null
