@@ -49,6 +49,20 @@ to void getting dropped (add it at nodes' initialization scripts):
     /sbin/iptables -t mangle -I OUTPUT -p GRE -j MARK --set-xmark
     0x10000/0x10000
 
+### Crashlooping libvirt-libvirt-default daemonset Pods
+
+One some nodes, depending on their workload, you may find steady
+libvirt crashlooping pods. These Pods log to hosting node's
+`/var/log/libvirt/libvirtd.log` (host moung), peeking it you'd find
+errors similar to:
+
+  2019-04-21 01:51:22.581+0000: 7363: error : virSecurityDriverLookup:80 : unsupported configuration: Security driver apparmor not enabled
+  2019-04-21 01:51:22.581+0000: 7363: error : umlStateInitialize:566 : Failed to create inotify watch on /var/run/libvirt/uml-guest: No space left on device
+  2019-04-21 01:51:22.581+0000: 7363: error : virStateInitialize:783 : Initialization of UML state driver failed: unsupported configuration: Security driver apparmor not enabled
+
+To fix these, increase the amount of inotify watchers at nodes, via e.g.:
+
+  echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
 
 ### ceph-mons
 
