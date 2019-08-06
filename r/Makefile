@@ -1,7 +1,7 @@
 REPO=https://github.com/rook/rook
 REPO_DIR=$(REPO_ROOT)/rook
 
-ROOK_MANIFESTS=$(REPO_DIR)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox}.yaml
+ROOK_MANIFESTS=$(REPO_DIR)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox,common}.yaml
 
 
 help:
