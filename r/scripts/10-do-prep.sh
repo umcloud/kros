@@ -7,7 +7,7 @@ prep_cluster() {
     ${MY_DIR}/generate-nodes.sh ${NODES:?} > ${cluster_extra}
     test -s ${cluster_extra} || { echo "FATAL: ${cluster_extra} in zero" ; exit 1 ;}
     set -e
-    (sed -e '/useAllNodes:/s/true/false/;/useAllDevices:/s/true/false/;/Cluster.level.list/,$d' ${CLUSTER_SRC} && cat ${cluster_extra}) > ${CLUSTER_DST}
+    (sed -e '/allowUnsupported:/s/false/true/;/useAllNodes:/s/true/false/;/useAllDevices:/s/true/false/;/Cluster.level.list/,$d' ${CLUSTER_SRC} && cat ${cluster_extra}) > ${CLUSTER_DST}
 }
 MY_DIR=$(dirname ${0})
 CLUSTER_SRC=${1:?missing arg1: CLUSTER_SRC (cluster.yaml)}
