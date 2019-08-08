@@ -1,0 +1,16 @@
+# Hit by https://bugs.launchpad.net/grenade/+bug/1761775 during queens -> rocky upgrade
+# fixed by swapping the order below
+diff --git a/nova/templates/bin/_db-sync.sh.tpl b/nova/templates/bin/_db-sync.sh.tpl
+index 4e38a74..542a9f4 100644
+--- a/nova/templates/bin/_db-sync.sh.tpl
++++ b/nova/templates/bin/_db-sync.sh.tpl
+@@ -47,8 +47,8 @@ function manage_cells () {
+ # NOTE(portdirect): if the db has been populated we should setup cells if
+ # required, otherwise we should poulate the api db, and then setup cells.
+ if [ "$(nova-manage api_db version)" -gt "0" ]; then
+-  manage_cells
+   nova-manage api_db sync
++  manage_cells
+ else
+   nova-manage api_db sync
+   manage_cells

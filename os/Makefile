@@ -34,7 +34,7 @@ OPENSTACK_CLOUDS=/etc/openstack/clouds.yaml
 CHARTS_VALUES_YAML=/etc/openstack/os-charts-values.yaml
 OSH_EXTRA_HELM_ARGS_BASE="-f $(CHARTS_VALUES_YAML)"
 
-export OPENSTACK_RELEASE=queens
+export OPENSTACK_RELEASE=rocky
 
 REPO_OS_ROOT=https://git.openstack.org/openstack
 
@@ -141,6 +141,7 @@ set_OSH_EXTRA_HELM_ARGS = \
 		components=$$(sed -rn 's/helm.upgrade.--install.(\S+).*/\1/p' $$deploy_script|sort -u | paste -s) ;\
 		overrides=$$(for c in $$components; do ./tools/deployment/common/get-values-overrides.sh $$c; done) ;\
 		export OSH_EXTRA_HELM_ARGS=$$(echo $$overrides $(OSH_EXTRA_HELM_ARGS_BASE)) ;\
+		test $$components = horizon && kubectl delete pod -n openstack horizon-test || true ;\
 		echo "components=$$components OSH_EXTRA_HELM_ARGS=$$OSH_EXTRA_HELM_ARGS"
 
 # Do the actual deploy by running DEPLOY_SCRIPTS in sequence,
