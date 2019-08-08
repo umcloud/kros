@@ -1,10 +1,14 @@
 ---
-images:
-  neutron_server: docker.io/openstackhelm/neutron:ocata
-  #      apt-get install git-core
-  #      pip install git+https://github.com/openstack/neutron-lbaas.git@stable/ocata
-  #     neutron_server: docker.io/xjjo/neutron:ocata-ubuntu_xenial
-  # neutron_server: docker.io/xjjo/neutron:ocata-ubuntu_xenial
+#images:
+#  tags:
+#    #      apt-get install git-core
+#    #      pip install git+https://github.com/openstack/neutron-lbaas.git@stable/ocata
+#    #     neutron_server: docker.io/xjjo/neutron:ocata-ubuntu_xenial
+#    # neutron_server: docker.io/xjjo/neutron:ocata-ubuntu_xenial
+#    #neutron_server: docker.io/openstackhelm/neutron:ocata-ubuntu_xenial
+#    #neutron_lbaas: 'docker.io/kolla/ubuntu-source-neutron-lbaas-agent:ocata'
+#    neutron_server: docker.io/xjjo/neutron:queens-ubuntu_xenial
+#    neutron_lbaas: docker.io/xjjo/neutron:queens-ubuntu_xenial
 
 # enable(not?) neutron lbaas
 manifests:
@@ -20,6 +24,10 @@ conf:
       keyring: ${CEPH_ADMIN_KEYRING}
     pools:
       volume:
+        crush_rule: replicated_ruleset
+      backup:
+        crush_rule: replicated_ruleset
+      cinder.volumes:
         crush_rule: replicated_ruleset
   global:
     mon_host: ceph-mon-0

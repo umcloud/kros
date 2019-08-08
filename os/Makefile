@@ -32,7 +32,9 @@ DEPLOY_SCRIPTS=$(DEPLOY_SCRIPTS_BASE) $(DEPLOY_SCRIPTS_EXTRA)
 OSH_PASSWORDS_ENV=/etc/openstack/osh-passwords.env
 OPENSTACK_CLOUDS=/etc/openstack/clouds.yaml
 CHARTS_VALUES_YAML=/etc/openstack/os-charts-values.yaml
-OSH_EXTRA_HELM_ARGS="-f $(CHARTS_VALUES_YAML)"
+OSH_EXTRA_HELM_ARGS_BASE="-f $(CHARTS_VALUES_YAML)"
+
+export OPENSTACK_RELEASE=queens
 
 REPO_OS_ROOT=https://git.openstack.org/openstack
 
@@ -132,24 +134,36 @@ $(CEPH_ADMIN_KEYRING_ENV): Makefile
 			"ROOK_CEPH_NS=$(ROOK_CEPH_NS)" \
 			> $(@)
 
+# XXX: Sucky integration (Aug/2019): get-values-overrides.sh is NOT available for multinode scripts,
+# need to get them myself: scriptlet below to plug inside for loop (relying on `deploy_script` var)
+# that will setup `OSH_EXTRA_HELM_ARGS` usable by chart deploy_script-s
+set_OSH_EXTRA_HELM_ARGS = \
+		components=$$(sed -rn 's/helm.upgrade.--install.(\S+).*/\1/p' $$deploy_script|sort -u | paste -s) ;\
+		overrides=$$(for c in $$components; do ./tools/deployment/common/get-values-overrides.sh $$c; done) ;\
+		export OSH_EXTRA_HELM_ARGS=$$(echo $$overrides $(OSH_EXTRA_HELM_ARGS_BASE)) ;\
+		echo "components=$$components OSH_EXTRA_HELM_ARGS=$$OSH_EXTRA_HELM_ARGS"
+
 # Do the actual deploy by running DEPLOY_SCRIPTS in sequence,
 # DEPLOY_SCRIPTS is filtered-in for only the components we want
 # to deploy
 # Need to void NETWORK_TUNNEL_DEV=<local_default_route_interface> to avoid using this *local*
 # iface on cluster nodes (wtf?)
+
 os-deploy: creds ceph-client-conf
 	@echo "Deploying for DEPLOY_TYPE: $(DEPLOY_TYPE), DEPLOY_SCRIPTS: $(DEPLOY_SCRIPTS) ..."
-	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
-		for i in $(DEPLOY_SCRIPTS); do \
-		(echo "=== $$i ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' $$i | env PS4='=== ' bash); \
+	@$(USE_VENV); cd $(REPO_ROOT)/openstack-helm && \
+		for deploy_script in $(DEPLOY_SCRIPTS); do \
+		$(set_OSH_EXTRA_HELM_ARGS) ;\
+		(echo "=== $$deploy_script ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' $$deploy_script | env PS4='=== ' bash); \
 		done
 
 # Run 'helm template' instead on each chart, to peek
 # at the generated YAML output for the deploy
 os-template:
 	@cd $(REPO_ROOT)/openstack-helm && export OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS) && \
-		for i in $(DEPLOY_SCRIPTS); do \
-		(sed -r -e '/wait/,$$d' -e 's/helm upgrade --install (\S+)/helm template --name \1/' $$i| env PS4='=== ' bash); \
+		for deploy_script in $(DEPLOY_SCRIPTS); do \
+		$(set_OSH_EXTRA_HELM_ARGS) ;\
+		(sed -r -e '/wait/,$$d' -e 's/helm upgrade --install (\S+)/helm template --name \1/' $$deploy_script| env PS4='=== ' bash); \
 		done
 # Run 'helm inspect' instead on each chart, to peek
 # on charts' settings.
@@ -157,8 +171,9 @@ os-template:
 # remove all the rest of the script from 'wait' to the end,
 os-inspect:
 	@cd $(REPO_ROOT)/openstack-helm && \
-		for i in $(DEPLOY_SCRIPTS); do \
-		(sed -r -e '/wait/,$$d' -e '/--namespace|--values|--set|OSH_/d' -e 's/helm upgrade --install \S+ (\S+).*/helm inspect \1/' $$i| env PS4='=== ' bash) 2>&1 ; \
+		for deploy_script in $(DEPLOY_SCRIPTS); do \
+		$(set_OSH_EXTRA_HELM_ARGS) ;\
+		(sed -r -e '/wait/,$$d' -e '/--namespace|--values|--set|OSH_/d' -e 's/helm upgrade --install \S+ (\S+).*/helm inspect \1/' $$deploy_script| env PS4='=== ' bash) 2>&1 ; \
 		done
 
 # Test for the use of 'password' (literal) as password,
@@ -195,11 +210,14 @@ package-osh-charts:
 	$(MAKE) -C $(REPO_ROOT)/openstack-helm all
 
 # Destroy the deployment by removing the running charts deploy,
-# PVs will persist, also creds are not resetted so a new deploy
+# mariadb PVs will persist, also creds are not resetted so a new deploy
 # should work.
 os-destroy:
 	helm ls --namespace=openstack -q|xargs -tr helm delete --purge
-	kubectl delete job,pod,cm --namespace=openstack --all --grace-period=1
+	helm ls --namespace=openstack -q|xargs -tr helm delete --no-hooks --purge
+	kubectl delete deploy,sts --namespace=openstack --all
+	kubectl delete job,pod,cm --namespace=openstack --all --grace-period=0 --force
+	kubectl delete pvc --namespace=openstack -l application=rabbitmq
 
 # DANGER: this will completely destroy the openstack deploy,
 # including its PVs (deleting the NS) and the credentials
