@@ -1,5 +1,6 @@
 REPO=https://github.com/rook/rook
 REPO_DIR=$(REPO_ROOT)/rook
+REPO_COMMIT=v1.0.4
 
 ROOK_MANIFESTS=$(REPO_DIR)/cluster/examples/kubernetes/ceph/{operator,cluster,storageclass,toolbox,common}.yaml
 

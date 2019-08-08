@@ -24,4 +24,9 @@ debug:
 	@echo NODES_IPS=\"$(NODES_IPS)\"
 
 git-clone:
-	@test -d $(REPO_DIR) && echo "Already cloned: $(REPO) into $(REPO_DIR)" && exit 0; git clone --depth=1 $(REPO) $(REPO_DIR)
+	@test -n "$(REPO_DIR)" && exit 0; echo "ERROR: REPO_DIR must be set"; exit 1
+	test -d $(REPO_DIR) && echo "Already cloned: $(REPO) into $(REPO_DIR)" && exit 0; git clone --depth=1 $(REPO) $(REPO_DIR)
+	cd $(REPO_DIR) || exit 1; \
+		(git stash save && git checkout master && git pull ) && \
+		(commit=$(REPO_COMMIT); test -z "$$commit" && commit=master; (git branch -D krosk-$$commit || true) && git checkout -b krosk-$$commit $$commit ) && \
+		(git stash list | grep -q . && git stash pop || true)

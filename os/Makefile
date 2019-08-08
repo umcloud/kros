@@ -228,8 +228,10 @@ os-destroy-all: os-destroy
 
 # Wrap git-clone target (from Makefile.common) to be used as:
 # make git-clone-openstack-helm (ditto openstack-helm-infra)
+git-clone-openstack-helm: REPO_COMMIT=3af5f78f5c3f521f61477af9a4676c37ea188fb1
+git-clone-openstack-helm-infra: REPO_COMMIT=8f749dd0614e00f29d76e0200b6eac574859f904
 git-clone-%:
-	$(MAKE) git-clone REPO=$(REPO_OS_ROOT)/$(*).git REPO_DIR=$(REPO_ROOT)/$(*)
+	$(MAKE) git-clone REPO=$(REPO_OS_ROOT)/$(*).git REPO_DIR=$(REPO_ROOT)/$(*) REPO_COMMIT=$(REPO_COMMIT)
 
 # Setup python venv for openstack CLI tools
 install-venv:

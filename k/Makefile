@@ -1,5 +1,6 @@
 REPO=https://github.com/kubernetes-incubator/kubespray.git
 REPO_DIR=$(REPO_ROOT)/kubespray
+REPO_COMMIT=ef10feb26fadbe589eaa12cb1110dcc6f5524136
 
 INVENTORY_DIR=$(CURDIR)/configs/inventory/cluster
 
