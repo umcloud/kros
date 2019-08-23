@@ -70,6 +70,9 @@ conf:
 #  neutron:
 #    DEFAULT:
 #      service_plugins: router,neutron_lbaas.services.loadbalancer.plugin.LoadBalancerPluginv2
+#  neutron:
+#    DEFAULT:
+#      dns_domain: local.
 
 # openstack-helm defaults to 'general' SC, change to null to use default
 # used-by: mariadb, cinder, glance
