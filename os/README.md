@@ -35,6 +35,11 @@ Where:
 * `make deploy` will run all deployment scripts for `DEPLOY_TYPE`
   (`multinode` by default)
 
+### Deploy specific component changes
+
+    make prep
+    make deploy DEPLOY_GREP=compute-kit
+
 ## Known issues:
 
 ### Calico

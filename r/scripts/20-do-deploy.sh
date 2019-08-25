@@ -8,6 +8,9 @@ deploy_node_custom_setup() {
     echo
 }
 
+deploy_common() {
+    (set -x; kubectl apply -f ${CONFIG_DIR}/common.yaml)
+}
 deploy_operator() {
     # No mods:
     (set -x; kubectl apply -f ${CONFIG_DIR}/operator.yaml)
@@ -35,6 +38,7 @@ deploy_sc_and_toolbox() {
 CONFIG_DIR=${1:?missing arg1: CONFIG_DIR}
 set -e
 deploy_node_custom_setup
+deploy_common
 deploy_operator
 deploy_cluster
 deploy_sc_and_toolbox
