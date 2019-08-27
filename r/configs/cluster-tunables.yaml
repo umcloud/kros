@@ -1,0 +1,20 @@
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: any
+spec:
+  cephVersion:
+    allowUnsupported: true
+  storage:
+    useAllNodes: false
+    useAllDevices: false
+  network:
+    hostNetwork: true
+  placement:
+    mon:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists

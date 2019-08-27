@@ -20,7 +20,7 @@ deploy_operator() {
 }
 
 deploy_cluster() {
-    (set -x; kubectl apply -f ${CONFIG_DIR}/cluster-all.yaml)
+    (set -x; kubectl apply -f ${CONFIG_DIR}/cluster-kustom.yaml)
 }
 
 deploy_sc_and_toolbox() {

@@ -13,8 +13,8 @@ help:
 
 include ../Makefile.common
 
-prep: debug git-clone configs-copy
-	./scripts/10-do-prep.sh $(CURDIR)/configs/cluster.yaml $(CURDIR)/configs/cluster-all.yaml $(NODES)
+prep: debug git-clone configs-copy req-kustomize
+	./scripts/10-do-prep.sh $(NODES)
 
 diff:
 	git diff configs/
@@ -32,3 +32,8 @@ configs-copy:
 gen-nodes:
 	@./scripts/generate-nodes.sh $(NODES)
 
+req-%:
+	@which $(*) >/dev/null || $(call missing,$(*))
+
+HELP_kustomize := -- install from https://github.com/kubernetes-sigs/kustomize
+missing = { $(eval HELP=$(HELP_$(1))) echo "ERROR: missing $(1) $(HELP)"; exit 1; }

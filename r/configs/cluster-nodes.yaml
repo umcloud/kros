@@ -1,0 +1,39 @@
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: any
+spec:
+  storage:
+    nodes:
+    - name: um-kros-01
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-02
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-03
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-05
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-07
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-08
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-09
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-10
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
