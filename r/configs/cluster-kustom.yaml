@@ -1,0 +1,68 @@
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: rook-ceph
+spec:
+  annotations: null
+  cephVersion:
+    allowUnsupported: true
+    image: ceph/ceph:v14.2.1-20190430
+  dashboard:
+    enabled: true
+  dataDirHostPath: /var/lib/rook
+  mon:
+    allowMultiplePerNode: false
+    count: 3
+  network:
+    hostNetwork: true
+  placement:
+    mon:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+  rbdMirroring:
+    workers: 0
+  resources: null
+  storage:
+    config: null
+    deviceFilter: null
+    location: null
+    nodes:
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-01
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-02
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-03
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-05
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-07
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-08
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-09
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-10
+    useAllDevices: false
+    useAllNodes: false
