@@ -1,37 +1,58 @@
 all:
   hosts:
-    um-krosk-01:
-      ansible_host: 172.16.16.71
-      ip: 172.16.16.71
-      access_ip: 172.16.16.71
-    um-krosk-02:
+    um-kros-01:
+      ansible_host: 172.16.16.66
+      ip: 172.16.16.66
+      access_ip: 172.16.16.66
+    um-kros-02:
+      ansible_host: 172.16.16.73
+      ip: 172.16.16.73
+      access_ip: 172.16.16.73
+    um-kros-03:
+      ansible_host: 172.16.16.68
+      ip: 172.16.16.68
+      access_ip: 172.16.16.68
+    um-kros-05:
       ansible_host: 172.16.16.74
       ip: 172.16.16.74
       access_ip: 172.16.16.74
-    um-krosk-03:
-      ansible_host: 172.16.16.72
-      ip: 172.16.16.72
-      access_ip: 172.16.16.72
-    um-krosk-04:
-      ansible_host: 172.16.16.75
-      ip: 172.16.16.75
-      access_ip: 172.16.16.75
+    um-kros-07:
+      ansible_host: 172.16.16.65
+      ip: 172.16.16.65
+      access_ip: 172.16.16.65
+    um-kros-08:
+      ansible_host: 172.16.16.64
+      ip: 172.16.16.64
+      access_ip: 172.16.16.64
+    um-kros-09:
+      ansible_host: 172.16.16.67
+      ip: 172.16.16.67
+      access_ip: 172.16.16.67
+    um-kros-10:
+      ansible_host: 172.16.16.69
+      ip: 172.16.16.69
+      access_ip: 172.16.16.69
   children:
     kube-master:
       hosts:
-        um-krosk-01:
-        um-krosk-02:
+        um-kros-01:
+        um-kros-02:
+        um-kros-03:
     kube-node:
       hosts:
-        um-krosk-01:
-        um-krosk-02:
-        um-krosk-03:
-        um-krosk-04:
+        um-kros-01:
+        um-kros-02:
+        um-kros-03:
+        um-kros-05:
+        um-kros-07:
+        um-kros-08:
+        um-kros-09:
+        um-kros-10:
     etcd:
       hosts:
-        um-krosk-01:
-        um-krosk-02:
-        um-krosk-03:
+        um-kros-01:
+        um-kros-02:
+        um-kros-03:
     k8s-cluster:
       children:
         kube-master:
