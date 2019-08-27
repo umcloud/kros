@@ -1,6 +1,6 @@
 REPO=https://github.com/kubernetes-incubator/kubespray.git
 REPO_DIR=$(REPO_ROOT)/kubespray
-REPO_COMMIT=ef10feb26fadbe589eaa12cb1110dcc6f5524136
+REPO_COMMIT=v2.11.0
 
 INVENTORY_DIR=$(CURDIR)/configs/inventory/cluster
 
@@ -38,6 +38,14 @@ cluster:
 	source .venv/bin/activate && cd $(REPO_DIR) && \
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml cluster.yml
 
+cluster-upgrade:
+	source .venv/bin/activate && cd $(REPO_DIR) && \
+		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml upgrade-cluster.yml
+
+cluster-reset:
+	source .venv/bin/activate && cd $(REPO_DIR) && \
+		ansible-playbook --flush-cache -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml reset.yml
+
 kubectl:
 	ssh ubuntu@$(MASTER) "sudo cp /etc/kubernetes/admin.conf ~ && sudo chmod 644 admin.conf"
 	mkdir -p ~/.kube
@@ -59,18 +67,20 @@ helm: certmanager
 	$(HELM) ls --all
 
 nginx-ingress:
-	$(KBCTL) apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/mandatory.yaml
+	$(KBCTL) apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/mandatory.yaml
 	$(KBCTL) apply -f $(K8SCONF)cloud-generic.yaml
 
 nginx-ingress-destroy:
 	$(KBCTL) delete -f $(K8SCONF)cloud-generic.yaml
-	$(KBCTL) delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/mandatory.yaml
+	$(KBCTL) delete -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/mandatory.yaml
 
 openebs:
-	$(HELM) install --namespace openebs --name openebs stable/openebs
-	$(KBCTL) apply -f https://raw.githubusercontent.com/openebs/openebs/master/k8s/openebs-storageclasses.yaml
+	$(KBCTL) apply -f https://openebs.github.io/charts/openebs-operator-1.1.0.yaml
+
+openebs-destroy:
+	$(KBCTL) delete -f https://openebs.github.io/charts/openebs-operator-1.1.0.yaml
 
 K8SCONF=configs/
 SHELL:= /bin/bash
 KBCTL=kubectl --insecure-skip-tls-verify
-HELM=KUBECONFIG=./admin.conf helm
+HELM=helm
