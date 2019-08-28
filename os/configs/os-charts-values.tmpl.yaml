@@ -16,27 +16,14 @@ manifests:
 
 conf:
   # used-by: neutron
-  # TODO(jjo): use makefile var, e.g. NEUTRON_BR_EX_IFACE=enp5s0
+  # TODO(jjo): use makefile var, e.g. NEUTRON_BR_EX_IFACE=enp3s0+enp2s0
   auto_bridge_add:
-    br-ex: enp5s0
+    br-ex: enp3s0+enp2s0
   ceph:
     admin:
       keyring: ${CEPH_ADMIN_KEYRING}
-    pools:
-      volume:
-        crush_rule: replicated_ruleset
-      backup:
-        crush_rule: replicated_ruleset
-      cinder.volumes:
-        crush_rule: replicated_ruleset
   global:
     mon_host: ceph-mon-0
-  pool:
-    default:
-      crush_rule: replicated_ruleset
-  glance:
-    glance_store:
-      rbd_store_crush_rule: replicated_ruleset
   # used-by: neutron
   plugins:
     ml2_conf:
@@ -65,14 +52,6 @@ conf:
       # dnsmasq_local_resolv would need adding routes OS routers towards Kube DNS
       #dnsmasq_local_resolv: True
       dnsmasq_dns_servers: 8.8.8.8, 8.8.4.4
-## jjo: BROKEN, as the neutron-server docker image doesn't have it :(
-#  xjjo/ image 2019-08-03
-#  neutron:
-#    DEFAULT:
-#      service_plugins: router,neutron_lbaas.services.loadbalancer.plugin.LoadBalancerPluginv2
-#  neutron:
-#    DEFAULT:
-#      dns_domain: local.
 
 # openstack-helm defaults to 'general' SC, change to null to use default
 # used-by: mariadb, cinder, glance
@@ -82,6 +61,7 @@ volume:
 storage: rbd
 
 endpoints:
+  cluster_domain_suffix: metal.kube.um.edu.ar
   ceph_mon:
     # See Makefile for update-ceph-mon-openstack-svc target
     namespace: openstack

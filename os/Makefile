@@ -4,7 +4,7 @@ SETUP_VENV=pyvenv .venv
 USE_VENV=source .venv/bin/activate
 TEST_VENV=test -f .venv/bin/activate
 
-SVC_CLUSTER=svc.cluster.local
+SVC_CLUSTER=svc.metal.kube.um.edu.ar
 
 # Ceph integration
 ROOK_CEPH_NS=rook-ceph
@@ -100,17 +100,18 @@ ceph-client-conf: $(CEPH_ADMIN_KEYRING_ENV) update-ceph-mon-openstack-svc
 # this target will update these to point to *currently* running ones
 update-ceph-mon-openstack-svc:
 	$(MAKE) -s env-ceph-mons ROOK_CEPH_NS=$(ROOK_CEPH_NS) |egrep ^export > configs/ceph-mon-openstack.env
+	-kubectl create ns openstack
 	. configs/ceph-mon-openstack.env && envsubst < configs/ceph-mon-openstack.tmpl.yaml | kubectl apply -f-
 	kubectl create cm --namespace=openstack ceph-etc --dry-run --from-file=configs/ceph-etc -oyaml | kubectl apply -f-
 	kubectl get svc -n openstack -l app=ceph-mon
 
 # Show env needed to update ceph-mon-0,1,2 entries from ceph-mon-openstack.yaml as e.g.:
-# export MON_0=rook-ceph-mon-d.rook-ceph.svc.cluster.local
-# export MON_1=rook-ceph-mon-e.rook-ceph.svc.cluster.local
-# export MON_2=rook-ceph-mon-f.rook-ceph.svc.cluster.local
+# Note we're using hostNetwork: true for the mons, to keep them at a stable IP:PORT
+# export MON_0=<hostIP node1>
+# export MON_1=<hostIP node2>
+# export MON_2=<hostIP node3>
 env-ceph-mons:
-	kubectl get svc -n ${ROOK_CEPH_NS} -l app=${ROOK_CEPH_NS}-mon -l mon -ogo-template='{{range $$i, $$e :=.items}}export MON_{{$$i}}={{.metadata.name}}.{{.metadata.namespace}}.svc.cluster.local{{"\n"}}{{end}}'
-
+	kubectl get pod -n ${ROOK_CEPH_NS} -l app=${ROOK_CEPH_NS}-mon -l mon -ogo-template='{{range $$i, $$e :=.items}}export MON_{{$$i}}={{.status.hostIP}}.xip.io{{"\n"}}{{end}}'
 
 hack-etc-hosts:
 	$(eval INGRESS_IP=$(shell kubectl get svc -n ingress-nginx ingress-nginx -ojsonpath='{.status.loadBalancer.ingress[0].ip}'))
