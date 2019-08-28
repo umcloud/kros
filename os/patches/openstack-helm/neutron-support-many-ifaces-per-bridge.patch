@@ -1,0 +1,61 @@
+diff --git a/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl b/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
+index fb8123b..773fe76 100644
+--- a/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
++++ b/neutron/templates/bin/_neutron-linuxbridge-agent-init.sh.tpl
+@@ -20,19 +20,22 @@ set -ex
+ 
+ # configure all bridge mappings defined in config
+ # /tmp/auto_bridge_add is one line json file: {"br-ex1":"eth1","br-ex2":"eth2"}
++# also supports many interfaces per br-ex, eg: {"br-ex1":"eth1+eth3+eth5","br-ex2":"eth2"}
+ for bmap in `sed 's/[{}"]//g' /tmp/auto_bridge_add | tr "," "\n"`
+ do
+   bridge=${bmap%:*}
+-  iface=${bmap#*:}
++  ifaces=${bmap#*:}
+   # adding existing bridge would break out the script when -e is set
+   set +e
+   ip link add name $bridge type bridge
+   set -e
+   ip link set dev $bridge up
+-  if [ -n "$iface" ] && [ "$iface" != "null" ]
+-  then
+-    ip link set dev $iface  master $bridge
+-  fi
++  for iface in ${ifaces//+/ }; do
++    if [ -n "$iface" ] && [ "$iface" != "null" ] && ip link show ${iface} >/dev/null
++    then
++      ip link set dev $iface  master $bridge
++    fi
++  done
+ done
+ 
+ tunnel_interface="{{- .Values.network.interface.tunnel -}}"
+diff --git a/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl b/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
+index b9c4b78..d22f654 100644
+--- a/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
++++ b/neutron/templates/bin/_neutron-openvswitch-agent-init.sh.tpl
+@@ -37,16 +37,18 @@ fi
+ 
+ # handle any bridge mappings
+ # /tmp/auto_bridge_add is one line json file: {"br-ex1":"eth1","br-ex2":"eth2"}
++# also supports many interfaces per br-ex, eg: {"br-ex1":"eth1+eth3+eth5","br-ex2":"eth2"}
+ for bmap in `sed 's/[{}"]//g' /tmp/auto_bridge_add | tr "," "\n"`
+ do
+   bridge=${bmap%:*}
+-  iface=${bmap#*:}
++  ifaces=${bmap#*:}
+   ovs-vsctl --no-wait --may-exist add-br $bridge
+-  if [ -n "$iface" ] && [ "$iface" != "null" ]
+-  then
+-    ovs-vsctl --no-wait --may-exist add-port $bridge $iface
+-    ip link set dev $iface up
+-  fi
++  for iface in ${ifaces//+/ }; do
++    if [ -n "$iface" ] && [ "$iface" != "null" ] && ip link show ${iface} >/dev/null
++    then
++      ovs-vsctl --no-wait --may-exist add-port $bridge $iface
++    fi
++  done
+ done
+ 
+ tunnel_interface="{{- .Values.network.interface.tunnel -}}"
