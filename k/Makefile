@@ -41,6 +41,10 @@ cluster:
 cluster-upgrade:
 	source .venv/bin/activate && cd $(REPO_DIR) && \
 		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml upgrade-cluster.yml
+cluster-scale:
+	source .venv/bin/activate && cd $(REPO_DIR) && \
+		ansible-playbook -u ubuntu -b -i $(INVENTORY_DIR)/hosts.yaml scale.yml
+
 
 cluster-reset:
 	source .venv/bin/activate && cd $(REPO_DIR) && \

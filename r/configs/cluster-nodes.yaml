@@ -17,7 +17,15 @@ spec:
       directories:
       - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1
+    - name: um-kros-04
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
     - name: um-kros-05
+      directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+    - name: um-kros-06
       directories:
       - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1

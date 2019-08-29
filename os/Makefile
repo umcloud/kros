@@ -150,13 +150,16 @@ set_OSH_EXTRA_HELM_ARGS = \
 # to deploy
 # Need to void NETWORK_TUNNEL_DEV=<local_default_route_interface> to avoid using this *local*
 # iface on cluster nodes (wtf?)
+# On the fly fixes:
+# - disable the NETWORK_TUNNEL_DEV logic as this deployment host not necessarily equals nodes (wtf1!)
+# - virt_type=qemu by default, REALLY ?!, use =kvm for HW accel (wtf2!)
 
 os-deploy: creds ceph-client-conf
 	@echo "Deploying for DEPLOY_TYPE: $(DEPLOY_TYPE), DEPLOY_SCRIPTS: $(DEPLOY_SCRIPTS) ..."
 	@$(USE_VENV); cd $(REPO_ROOT)/openstack-helm && \
 		for deploy_script in $(DEPLOY_SCRIPTS); do \
 		$(set_OSH_EXTRA_HELM_ARGS) ;\
-		(echo "=== $$deploy_script ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' $$deploy_script | env PS4='=== ' bash); \
+		(echo "=== $$deploy_script ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' -e 's/virt_type=qemu/virt_type=kvm/' $$deploy_script | env PS4='=== ' bash); \
 		done
 
 # Run 'helm template' instead on each chart, to peek
