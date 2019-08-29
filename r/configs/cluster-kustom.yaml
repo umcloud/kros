@@ -33,7 +33,6 @@ spec:
     location: null
     nodes:
     - directories:
-      - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1
       name: um-kros-01
     - directories:
@@ -47,7 +46,15 @@ spec:
     - directories:
       - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1
+      name: um-kros-04
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
       name: um-kros-05
+    - directories:
+      - path: /srv/ceph/ceph0
+      - path: /srv/ceph/ceph1
+      name: um-kros-06
     - directories:
       - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1
@@ -60,9 +67,5 @@ spec:
       - path: /srv/ceph/ceph0
       - path: /srv/ceph/ceph1
       name: um-kros-09
-    - directories:
-      - path: /srv/ceph/ceph0
-      - path: /srv/ceph/ceph1
-      name: um-kros-10
     useAllDevices: false
     useAllNodes: false

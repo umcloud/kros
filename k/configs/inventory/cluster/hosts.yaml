@@ -12,10 +12,18 @@ all:
       ansible_host: 172.16.16.68
       ip: 172.16.16.68
       access_ip: 172.16.16.68
+    um-kros-04:
+      ansible_host: 172.16.16.70
+      ip: 172.16.16.70
+      access_ip: 172.16.16.70
     um-kros-05:
       ansible_host: 172.16.16.74
       ip: 172.16.16.74
       access_ip: 172.16.16.74
+    um-kros-06:
+      ansible_host: 172.16.16.71
+      ip: 172.16.16.71
+      access_ip: 172.16.16.71
     um-kros-07:
       ansible_host: 172.16.16.65
       ip: 172.16.16.65

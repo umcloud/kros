@@ -7,7 +7,7 @@ SHELL=/bin/bash
 # kubespray/contrib/inventory_builder/inventory.py will still start its node
 # naming from "1" (even if below was set e.g. to {101..110}).
 HOST_PREFIX=um-kros-
-NODES=$(HOST_PREFIX)01 $(HOST_PREFIX)02 $(HOST_PREFIX)03 $(HOST_PREFIX)05 $(HOST_PREFIX)07 $(HOST_PREFIX)08 $(HOST_PREFIX)09 $(HOST_PREFIX)10
+NODES=$(HOST_PREFIX)01 $(HOST_PREFIX)02 $(HOST_PREFIX)03 $(HOST_PREFIX)04 $(HOST_PREFIX)05 $(HOST_PREFIX)06 $(HOST_PREFIX)07 $(HOST_PREFIX)08 $(HOST_PREFIX)09 $(HOST_PREFIX)10
 MASTER=$(HOST_PREFIX)01
 
 NODES_IPS=$(shell bash -c 'printf "%s\n" $(NODES)|xargs -l1 host|sed "s/.*address //"|xargs')
