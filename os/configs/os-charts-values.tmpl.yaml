@@ -52,6 +52,12 @@ conf:
       # dnsmasq_local_resolv would need adding routes OS routers towards Kube DNS
       #dnsmasq_local_resolv: True
       dnsmasq_dns_servers: 8.8.8.8, 8.8.4.4
+  # Yet another WTF: unset force_raw_images=true (default), to
+  # avoid nova-compute from running `qemu-convert ... ` from qcow2 to raw
+  # on every new (uncached) image, and also save disk space yo'
+  nova:
+    DEFAULT:
+      force_raw_images: false
 
 # openstack-helm defaults to 'general' SC, change to null to use default
 # used-by: mariadb, cinder, glance
