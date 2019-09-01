@@ -162,6 +162,11 @@ os-deploy: creds ceph-client-conf
 		(echo "=== $$deploy_script ==="; sed -r -e '/tunnel:.*NETWORK_TUNNEL_DEV.*/s/tunnel:/tunnel_broken_disabled:/' -e 's/virt_type=qemu/virt_type=kvm/' $$deploy_script | env PS4='=== ' bash); \
 		done
 
+# WIP octavia deploy for lbaas_v2 support,
+# utterly manual for now from ongoing upstream PR --jjo, 2019-09-01
+os-deploy-octavia:
+	OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS_BASE) ./octavia-deploy.sh
+
 # Run 'helm template' instead on each chart, to peek
 # at the generated YAML output for the deploy
 os-template:

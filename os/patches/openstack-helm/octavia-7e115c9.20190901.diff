@@ -1,0 +1,2637 @@
+From 7e115c95f33eaee04dbb72f6234ca6aeb1b3ce8e Mon Sep 17 00:00:00 2001
+From: hagun.kim <hagun.kim@samsung.com>
+Date: Tue, 15 Jan 2019 10:59:18 +0900
+Subject: [PATCH] Octavia: add octavia chart and deployment scripts
+
+This PS adds octavia chart and its deployment scripts.
+
+Blueprint name : openstack-helm-octavia
+
+- Deployments : api, worker, housekeeping
+- Daemonset : health-manager
+- health-manager daemonset creates o-hm device on each controller node.
+- This is for multi node deployment.
+- 180-create-resource-for-octavia.sh : Create openstack resources
+    (network, sec groups, flavor, keypair, image for development)
+- 190-create-octavia-certs.sh : Create certificates to use Octavia
+    (the certs is passed into pod using secret and volume for development)
+- 200-octavia.sh : Deploy Octavia chart
+
+Note: This chart doesn't include amphora image itself and its build.
+
+Change-Id: I0bb7dfc7c15d77287c05a8542347e19fc269aba4
+Signed-off-by: hagun.kim <hagun.kim@samsung.com>
+---
+
+diff --git a/keystone/values.yaml b/keystone/values.yaml
+index 6ff6dae..666ec09 100644
+--- a/keystone/values.yaml
++++ b/keystone/values.yaml
+@@ -437,6 +437,9 @@
+               application: senlin
+         - podSelector:
+             matchLabels:
++              application: octavia
++        - podSelector:
++            matchLabels:
+               application: placement
+         - podSelector:
+             matchLabels:
+diff --git a/neutron/templates/configmap-etc.yaml b/neutron/templates/configmap-etc.yaml
+index b07f16f..62eb9d6 100644
+--- a/neutron/templates/configmap-etc.yaml
++++ b/neutron/templates/configmap-etc.yaml
+@@ -84,6 +84,10 @@
+ {{- $_ := set $envAll.Values.conf.neutron.nova "password" $envAll.Values.endpoints.identity.auth.nova.password -}}
+ {{- end -}}
+ 
++{{- if empty $envAll.Values.conf.neutron.octavia.base_url -}}
++{{- $_ := tuple "load_balancer" "internal" "api" . | include "helm-toolkit.endpoints.keystone_endpoint_uri_lookup"| set $envAll.Values.conf.neutron.octavia "base_url" -}}
++{{- end }}
++
+ {{/*
+ nova_metadata_ip can go away when Newton is no longer supported, otherwise
+ just set it along with nova_metadata_host.
+diff --git a/neutron/values.yaml b/neutron/values.yaml
+index 6c04b9f..8142336 100644
+--- a/neutron/values.yaml
++++ b/neutron/values.yaml
+@@ -1765,6 +1765,8 @@
+       memcache_security_strategy: ENCRYPT
+       auth_type: password
+       auth_version: v3
++    octavia:
++      request_poll_timeout: 3000
+   logging:
+     loggers:
+       keys:
+@@ -2133,6 +2135,21 @@
+       api:
+         default: 9696
+         public: 80
++  load_balancer:
++    name: octavia
++    hosts:
++      default: octavia-api
++      public: octavia
++    host_fqdn_override:
++      default: null
++    path:
++      default: null
++    scheme:
++      default: http
++    port:
++      api:
++        default: 9876
++        public: 80
+   fluentd:
+     namespace: osh-infra
+     name: fluentd
+diff --git a/octavia/Chart.yaml b/octavia/Chart.yaml
+new file mode 100644
+index 0000000..e9cceb9
+--- /dev/null
++++ b/octavia/Chart.yaml
+@@ -0,0 +1,25 @@
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++apiVersion: v1
++description: OpenStack-Helm Octavia
++name: octavia
++version: 0.1.0
++home: https://docs.openstack.org/octavia/latest/
++icon: https://www.openstack.org/themes/openstack/images/project-mascots/Octavia/OpenStack_Project_Octavia_vertical.png
++sources:
++  - https://opendev.org/openstack/octavia
++  - https://opendev.org/openstack/openstack-helm
++maintainers:
++  - name: OpenStack-Helm Authors
+diff --git a/octavia/requirements.yaml b/octavia/requirements.yaml
+new file mode 100644
+index 0000000..35cf13c
+--- /dev/null
++++ b/octavia/requirements.yaml
+@@ -0,0 +1,18 @@
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++dependencies:
++  - name: helm-toolkit
++    repository: http://localhost:8879/charts
++    version: 0.1.0
+diff --git a/octavia/templates/bin/_bootstrap.sh.tpl b/octavia/templates/bin/_bootstrap.sh.tpl
+new file mode 100644
+index 0000000..98d1b37
+--- /dev/null
++++ b/octavia/templates/bin/_bootstrap.sh.tpl
+@@ -0,0 +1,20 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++{{ .Values.bootstrap.script | default "echo 'Not Enabled'" }}
+diff --git a/octavia/templates/bin/_db-sync.sh.tpl b/octavia/templates/bin/_db-sync.sh.tpl
+new file mode 100644
+index 0000000..ae7e3c8
+--- /dev/null
++++ b/octavia/templates/bin/_db-sync.sh.tpl
+@@ -0,0 +1,21 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++
++octavia-db-manage upgrade head
+diff --git a/octavia/templates/bin/_octavia-api.sh.tpl b/octavia/templates/bin/_octavia-api.sh.tpl
+new file mode 100644
+index 0000000..9e32268
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-api.sh.tpl
+@@ -0,0 +1,31 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++COMMAND="${@:-start}"
++
++function start () {
++  exec octavia-api \
++        --config-file /etc/octavia/octavia.conf
++}
++
++function stop () {
++  kill -TERM 1
++}
++
++$COMMAND
+diff --git a/octavia/templates/bin/_octavia-health-manager-get-port.sh.tpl b/octavia/templates/bin/_octavia-health-manager-get-port.sh.tpl
+new file mode 100644
+index 0000000..fbe8f6a
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-health-manager-get-port.sh.tpl
+@@ -0,0 +1,28 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++
++HOSTNAME=$(hostname -s)
++PORTNAME=octavia-health-manager-port-$HOSTNAME
++
++HM_PORT_ID=$(openstack port show $PORTNAME -c id -f value)
++HM_PORT_MAC=$(openstack port show $PORTNAME -c mac_address -f value)
++
++echo $HM_PORT_ID > /tmp/pod-shared/HM_PORT_ID
++echo $HM_PORT_MAC > /tmp/pod-shared/HM_PORT_MAC
+diff --git a/octavia/templates/bin/_octavia-health-manager-nic-init.sh.tpl b/octavia/templates/bin/_octavia-health-manager-nic-init.sh.tpl
+new file mode 100644
+index 0000000..0317c3d
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-health-manager-nic-init.sh.tpl
+@@ -0,0 +1,35 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++
++HM_PORT_ID=$(cat /tmp/pod-shared/HM_PORT_ID)
++HM_PORT_MAC=$(cat /tmp/pod-shared/HM_PORT_MAC)
++
++ovs-vsctl --no-wait show
++
++ovs-vsctl --may-exist add-port br-int o-hm0 \
++        -- set Interface o-hm0 type=internal \
++        -- set Interface o-hm0 external-ids:iface-status=active \
++        -- set Interface o-hm0 external-ids:attached-mac=$HM_PORT_MAC \
++        -- set Interface o-hm0 external-ids:iface-id=$HM_PORT_ID \
++        -- set Interface o-hm0 external-ids:skip_cleanup=true
++
++ip link set dev o-hm0 address $HM_PORT_MAC
++
++iptables -I INPUT -i o-hm0 -p udp --dport {{ .Values.conf.octavia.health_manager.bind_port }} -j ACCEPT
+diff --git a/octavia/templates/bin/_octavia-health-manager.sh.tpl b/octavia/templates/bin/_octavia-health-manager.sh.tpl
+new file mode 100644
+index 0000000..3a42066
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-health-manager.sh.tpl
+@@ -0,0 +1,38 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++COMMAND="${@:-start}"
++
++function start () {
++  cat > /tmp/dhclient.conf <<EOF
++request subnet-mask,broadcast-address,interface-mtu;
++do-forward-updates false;
++EOF
++
++  dhclient -v o-hm0 -cf /tmp/dhclient.conf
++
++  exec octavia-health-manager \
++        --config-file /etc/octavia/octavia.conf
++}
++
++function stop () {
++  kill -TERM 1
++}
++
++$COMMAND
+diff --git a/octavia/templates/bin/_octavia-housekeeping.sh.tpl b/octavia/templates/bin/_octavia-housekeeping.sh.tpl
+new file mode 100644
+index 0000000..a4cd2f0
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-housekeeping.sh.tpl
+@@ -0,0 +1,31 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++COMMAND="${@:-start}"
++
++function start () {
++  exec octavia-housekeeping \
++        --config-file /etc/octavia/octavia.conf
++}
++
++function stop () {
++  kill -TERM 1
++}
++
++$COMMAND
+diff --git a/octavia/templates/bin/_octavia-worker.sh.tpl b/octavia/templates/bin/_octavia-worker.sh.tpl
+new file mode 100644
+index 0000000..f612ff3
+--- /dev/null
++++ b/octavia/templates/bin/_octavia-worker.sh.tpl
+@@ -0,0 +1,31 @@
++#!/bin/bash
++
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++set -ex
++COMMAND="${@:-start}"
++
++function start () {
++  exec octavia-worker \
++        --config-file /etc/octavia/octavia.conf
++}
++
++function stop () {
++  kill -TERM 1
++}
++
++$COMMAND
+diff --git a/octavia/templates/configmap-bin.yaml b/octavia/templates/configmap-bin.yaml
+new file mode 100644
+index 0000000..be9a95d
+--- /dev/null
++++ b/octavia/templates/configmap-bin.yaml
+@@ -0,0 +1,62 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.configmap_bin }}
++{{- $envAll := . }}
++{{- $rallyTests := .Values.conf.rally_tests }}
++---
++apiVersion: v1
++kind: ConfigMap
++metadata:
++  name: octavia-bin
++data:
++{{- if .Values.images.local_registry.active }}
++  image-repo-sync.sh: |
++{{- include "helm-toolkit.scripts.image_repo_sync" . | indent 4 }}
++{{- end }}
++{{- if .Values.bootstrap.enabled }}
++  bootstrap.sh: |
++{{ tuple "bin/_bootstrap.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++{{- end }}
++  rally-test.sh: |
++{{ tuple $rallyTests | include "helm-toolkit.scripts.rally_test" | indent 4 }}
++  db-init.py: |
++{{- include "helm-toolkit.scripts.db_init" . | indent 4 }}
++  db-sync.sh: |
++{{ tuple "bin/_db-sync.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  db-drop.py: |
++{{- include "helm-toolkit.scripts.db_drop" . | indent 4 }}
++  ks-service.sh: |
++{{- include "helm-toolkit.scripts.keystone_service" . | indent 4 }}
++  ks-endpoints.sh: |
++{{- include "helm-toolkit.scripts.keystone_endpoints" . | indent 4 }}
++  ks-user.sh: |
++{{- include "helm-toolkit.scripts.keystone_user" . | indent 4 }}
++  octavia-api.sh: |
++{{ tuple "bin/_octavia-api.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  octavia-health-manager.sh: |
++{{ tuple "bin/_octavia-health-manager.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  octavia-health-manager-nic-init.sh: |
++{{ tuple "bin/_octavia-health-manager-nic-init.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  octavia-health-manager-get-port.sh: |
++{{ tuple "bin/_octavia-health-manager-get-port.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  octavia-housekeeping.sh: |
++{{ tuple "bin/_octavia-housekeeping.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  octavia-worker.sh: |
++{{ tuple "bin/_octavia-worker.sh.tpl" . | include "helm-toolkit.utils.template" | indent 4 }}
++  rabbit-init.sh: |
++{{- include "helm-toolkit.scripts.rabbit_init" . | indent 4 }}
++{{- end }}
+diff --git a/octavia/templates/configmap-etc.yaml b/octavia/templates/configmap-etc.yaml
+new file mode 100644
+index 0000000..e8d166c
+--- /dev/null
++++ b/octavia/templates/configmap-etc.yaml
+@@ -0,0 +1,117 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- define "octavia.configmap.etc" }}
++{{- $configMapName := index . 0 }}
++{{- $envAll := index . 1 }}
++{{- with $envAll }}
++
++{{- if empty .Values.conf.octavia.keystone_authtoken.auth_uri -}}
++{{- $_ := tuple "identity" "internal" "api" . | include "helm-toolkit.endpoints.keystone_endpoint_uri_lookup"| set .Values.conf.octavia.keystone_authtoken "auth_uri" -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.keystone_authtoken.auth_url -}}
++{{- $_ := tuple "identity" "internal" "api" . | include "helm-toolkit.endpoints.keystone_endpoint_uri_lookup"| set .Values.conf.octavia.keystone_authtoken "auth_url" -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.keystone_authtoken.region_name -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "region_name" .Values.endpoints.identity.auth.octavia.region_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.project_name -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "project_name" .Values.endpoints.identity.auth.octavia.project_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.project_domain_name -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "project_domain_name" .Values.endpoints.identity.auth.octavia.project_domain_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.user_domain_name -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "user_domain_name" .Values.endpoints.identity.auth.octavia.user_domain_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.username -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "username" .Values.endpoints.identity.auth.octavia.username -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.password -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "password" .Values.endpoints.identity.auth.octavia.password -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.keystone_authtoken.memcached_servers -}}
++{{- $_ := tuple "oslo_cache" "internal" "memcache" . | include "helm-toolkit.endpoints.host_and_port_endpoint_uri_lookup" | set .Values.conf.octavia.keystone_authtoken "memcached_servers" -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.keystone_authtoken.memcache_secret_key -}}
++{{- $_ := set .Values.conf.octavia.keystone_authtoken "memcache_secret_key" ( default ( randAlphaNum 64 ) .Values.endpoints.oslo_cache.auth.memcache_secret_key ) -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.service_auth.auth_url -}}
++{{- $_ := tuple "identity" "internal" "api" . | include "helm-toolkit.endpoints.keystone_endpoint_uri_lookup"| set .Values.conf.octavia.service_auth "auth_url" -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.service_auth.project_name -}}
++{{- $_ := set .Values.conf.octavia.service_auth "project_name" .Values.endpoints.identity.auth.admin.project_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.service_auth.project_domain_name -}}
++{{- $_ := set .Values.conf.octavia.service_auth "project_domain_name" .Values.endpoints.identity.auth.admin.project_domain_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.service_auth.user_domain_name -}}
++{{- $_ := set .Values.conf.octavia.service_auth "user_domain_name" .Values.endpoints.identity.auth.admin.user_domain_name -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.service_auth.username -}}
++{{- $_ := set .Values.conf.octavia.service_auth "username" .Values.endpoints.identity.auth.admin.username -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.service_auth.password -}}
++{{- $_ := set .Values.conf.octavia.service_auth "password" .Values.endpoints.identity.auth.admin.password -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.service_auth.memcached_servers -}}
++{{- $_ := tuple "oslo_cache" "internal" "memcache" . | include "helm-toolkit.endpoints.host_and_port_endpoint_uri_lookup" | set .Values.conf.octavia.service_auth "memcached_servers" -}}
++{{- end -}}
++{{- if empty .Values.conf.octavia.service_auth.memcache_secret_key -}}
++{{- $_ := set .Values.conf.octavia.service_auth "memcache_secret_key" ( default ( randAlphaNum 64 ) .Values.endpoints.oslo_cache.auth.memcache_secret_key ) -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.database.connection -}}
++{{- $_ := tuple "oslo_db" "internal" "octavia" "mysql" . | include "helm-toolkit.endpoints.authenticated_endpoint_uri_lookup"| set .Values.conf.octavia.database "connection" -}}
++{{- end -}}
++
++{{- if empty .Values.conf.octavia.DEFAULT.transport_url -}}
++{{- $_ := tuple "oslo_messaging" "internal" "octavia" "amqp" . | include "helm-toolkit.endpoints.authenticated_endpoint_uri_lookup" | set .Values.conf.octavia.DEFAULT "transport_url" -}}
++{{- end -}}
++
++{{- if and (empty .Values.conf.logging.handler_fluent) (has "fluent" .Values.conf.logging.handlers.keys) -}}
++{{- $fluentd_host := tuple "fluentd" "internal" $envAll | include "helm-toolkit.endpoints.hostname_namespaced_endpoint_lookup" }}
++{{- $fluentd_port := tuple "fluentd" "internal" "service" $envAll | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
++{{- $fluent_args := printf "('%s.%s', '%s', %s)" .Release.Namespace .Release.Name $fluentd_host $fluentd_port }}
++{{- $handler_fluent := dict "class" "fluent.handler.FluentHandler" "formatter" "fluent" "args" $fluent_args -}}
++{{- $_ := set .Values.conf.logging "handler_fluent" $handler_fluent -}}
++{{- end -}}
++
++{{- if and (empty .Values.conf.logging.formatter_fluent) (has "fluent" .Values.conf.logging.formatters.keys) -}}
++{{- $formatter_fluent := dict "class" "oslo_log.formatters.FluentFormatter" -}}
++{{- $_ := set .Values.conf.logging "formatter_fluent" $formatter_fluent -}}
++{{- end -}}
++---
++apiVersion: v1
++kind: Secret
++metadata:
++  name: {{ $configMapName }}
++type: Opaque
++data:
++  octavia.conf: {{ include "helm-toolkit.utils.to_oslo_conf" .Values.conf.octavia | b64enc }}
++  logging.conf: {{ include "helm-toolkit.utils.to_oslo_conf" .Values.conf.logging | b64enc }}
++{{- end }}
++{{- end }}
++
++{{- if .Values.manifests.configmap_etc }}
++{{- list "octavia-etc" . | include "octavia.configmap.etc" }}
++{{- end }}
+diff --git a/octavia/templates/daemonset-health-manager.yaml b/octavia/templates/daemonset-health-manager.yaml
+new file mode 100644
+index 0000000..eb4d59d
+--- /dev/null
++++ b/octavia/templates/daemonset-health-manager.yaml
+@@ -0,0 +1,159 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- define "octavia.health_manager.daemonset" }}
++{{- $daemonset := index . 0 }}
++{{- $configMapName := index . 1 }}
++{{- $serviceAccountName := index . 2 }}
++{{- $envAll := index . 3 }}
++{{- with $envAll }}
++
++{{- $mounts_octavia_health_manager := .Values.pod.mounts.octavia_health_manager.octavia_health_manager }}
++{{- $mounts_octavia_health_manager_init := .Values.pod.mounts.octavia_health_manager.init_container }}
++
++---
++apiVersion: apps/v1
++kind: DaemonSet
++metadata:
++  name: octavia-health-manager
++  annotations:
++    {{ tuple $envAll | include "helm-toolkit.snippets.release_uuid" }}
++  labels:
++{{ tuple $envAll "octavia" "health_manager" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
++spec:
++  selector:
++    matchLabels:
++{{ tuple $envAll "octavia" "health_manager" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 6 }}
++{{ tuple $envAll "health_manager" | include "helm-toolkit.snippets.kubernetes_upgrades_daemonset" | indent 2 }}
++  template:
++    metadata:
++      labels:
++{{ tuple $envAll "octavia" "health_manager" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
++      annotations:
++        configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
++        configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
++    spec:
++      serviceAccountName: {{ $serviceAccountName }}
++      dnsPolicy: ClusterFirstWithHostNet
++      hostNetwork: true
++      hostPID: true
++      nodeSelector:
++        {{ .Values.labels.health_manager.node_selector_key }}: {{ .Values.labels.health_manager.node_selector_value }}
++      initContainers:
++{{ tuple $envAll "health_manager" $mounts_octavia_health_manager_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
++        - name: octavia-health-manager-get-port
++{{ tuple $envAll "octavia_health_manager_init" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.health_manager | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          env:
++{{- with $env := dict "ksUserSecret" ( index $envAll.Values.secrets.identity "admin" ) }}
++{{- include "helm-toolkit.snippets.keystone_openrc_env_vars" $env | indent 12 }}
++{{- end }}
++          command:
++            - /tmp/octavia-health-manager-get-port.sh
++          volumeMounts:
++            - name: pod-shared
++              mountPath: /tmp/pod-shared
++            - name: octavia-bin
++              mountPath: /tmp/octavia-health-manager-get-port.sh
++              subPath: octavia-health-manager-get-port.sh
++              readOnly: true
++        - name: octavia-health-manager-nic-init
++{{ tuple $envAll "openvswitch_vswitchd" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.health_manager | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          securityContext:
++            runAsUser: 0
++            capabilities:
++              add:
++                - NET_ADMIN
++          command:
++            - /tmp/octavia-health-manager-nic-init.sh
++          volumeMounts:
++            - name: pod-shared
++              mountPath: /tmp/pod-shared
++            - name: octavia-bin
++              mountPath: /tmp/octavia-health-manager-nic-init.sh
++              subPath: octavia-health-manager-nic-init.sh
++              readOnly: true
++            - name: run
++              mountPath: /run
++      containers:
++        - name: octavia-health-manager
++{{ tuple $envAll "octavia_health_manager" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.health_manager | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          securityContext:
++            runAsUser: 0
++            capabilities:
++              add:
++                - NET_ADMIN
++          command:
++            - /tmp/octavia-health-manager.sh
++            - start
++          lifecycle:
++            preStop:
++              exec:
++                command:
++                  - /tmp/octavia-health-manager.sh
++                  - stop
++          volumeMounts:
++            - name: pod-etc-octavia
++              mountPath: /etc/octavia
++            - name: octavia-bin
++              mountPath: /tmp/octavia-health-manager.sh
++              subPath: octavia-health-manager.sh
++              readOnly: true
++            - name: octavia-etc
++              mountPath: /etc/octavia/octavia.conf
++              subPath: octavia.conf
++              readOnly: true
++            - name: octavia-etc
++              mountPath: {{ .Values.conf.octavia.DEFAULT.log_config_append }}
++              subPath: {{ base .Values.conf.octavia.DEFAULT.log_config_append }}
++              readOnly: true
++{{ if $mounts_octavia_health_manager.volumeMounts }}{{ toYaml $mounts_octavia_health_manager.volumeMounts | indent 12 }}{{ end }}
++      volumes:
++        - name: pod-etc-octavia
++          emptyDir: {}
++        - name: octavia-bin
++          configMap:
++            name: octavia-bin
++            defaultMode: 0555
++        - name: octavia-etc
++          secret:
++            secretName: {{ $configMapName }}
++            defaultMode: 0444
++        - name: pod-shared
++          emptyDir: {}
++        - name: run
++          hostPath:
++            path: /run
++{{ if $mounts_octavia_health_manager.volumes }}{{ toYaml $mounts_octavia_health_manager.volumes | indent 8 }}{{ end }}
++{{- end }}
++{{- end }}
++
++{{- if .Values.manifests.daemonset_health_manager }}
++{{- $envAll := . }}
++{{- $daemonset := "health_manager" }}
++{{- $configMapName := "octavia-etc" }}
++{{- $serviceAccountName := "octavia-health-manager" }}
++
++{{- $dependencyOpts := dict "envAll" $envAll "dependencyMixinParam" $envAll.Values.network.backend "dependencyKey" "health_manager" -}}
++{{- $_ := include "helm-toolkit.utils.dependency_resolver" $dependencyOpts | toString | fromYaml }}
++
++{{ tuple $envAll "pod_dependency" $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
++{{- $daemonset_yaml := list $daemonset $configMapName $serviceAccountName . | include "octavia.health_manager.daemonset" | toString | fromYaml }}
++{{- $configmap_yaml := "octavia.configmap.etc" }}
++{{- list $daemonset $daemonset_yaml $configmap_yaml $configMapName . | include "helm-toolkit.utils.daemonset_overrides" }}
++{{- end }}
+diff --git a/octavia/templates/deployment-api.yaml b/octavia/templates/deployment-api.yaml
+new file mode 100644
+index 0000000..a2c9668
+--- /dev/null
++++ b/octavia/templates/deployment-api.yaml
+@@ -0,0 +1,105 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.deployment_api }}
++{{- $envAll := . }}
++
++{{- $mounts_octavia_api := .Values.pod.mounts.octavia_api.octavia_api }}
++{{- $mounts_octavia_api_init := .Values.pod.mounts.octavia_api.init_container }}
++
++{{- $serviceAccountName := "octavia-api" }}
++{{ tuple $envAll "api" $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
++---
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: octavia-api
++  annotations:
++    {{ tuple $envAll | include "helm-toolkit.snippets.release_uuid" }}
++  labels:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
++spec:
++  replicas: {{ .Values.pod.replicas.api }}
++  selector:
++    matchLabels:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 6 }}
++{{ tuple $envAll | include "helm-toolkit.snippets.kubernetes_upgrades_deployment" | indent 2 }}
++  template:
++    metadata:
++      labels:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
++      annotations:
++        configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
++        configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
++    spec:
++      serviceAccountName: {{ $serviceAccountName }}
++      affinity:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_pod_anti_affinity" | indent 8 }}
++      nodeSelector:
++        {{ .Values.labels.api.node_selector_key }}: {{ .Values.labels.api.node_selector_value }}
++      terminationGracePeriodSeconds: {{ .Values.pod.lifecycle.termination_grace_period.api.timeout | default "30" }}
++      initContainers:
++{{ tuple $envAll "api" $mounts_octavia_api_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
++      containers:
++        - name: octavia-api
++{{ tuple $envAll "octavia_api" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.api | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          securityContext:
++            runAsUser: {{ .Values.pod.user.octavia.uid }}
++          command:
++            - /tmp/octavia-api.sh
++            - start
++          lifecycle:
++            preStop:
++              exec:
++                command:
++                  - /tmp/octavia-api.sh
++                  - stop
++          ports:
++            - name: o-api
++              containerPort: {{ tuple "load_balancer" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
++          readinessProbe:
++            tcpSocket:
++              port: {{ tuple "load_balancer" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
++          volumeMounts:
++            - name: pod-etc-octavia
++              mountPath: /etc/octavia
++            - name: octavia-bin
++              mountPath: /tmp/octavia-api.sh
++              subPath: octavia-api.sh
++              readOnly: true
++            - name: octavia-etc
++              mountPath: /etc/octavia/octavia.conf
++              subPath: octavia.conf
++              readOnly: true
++            - name: octavia-etc
++              mountPath: {{ .Values.conf.octavia.DEFAULT.log_config_append }}
++              subPath: {{ base .Values.conf.octavia.DEFAULT.log_config_append }}
++              readOnly: true
++{{ if $mounts_octavia_api.volumeMounts }}{{ toYaml $mounts_octavia_api.volumeMounts | indent 12 }}{{ end }}
++      volumes:
++        - name: pod-etc-octavia
++          emptyDir: {}
++        - name: octavia-bin
++          configMap:
++            name: octavia-bin
++            defaultMode: 0555
++        - name: octavia-etc
++          secret:
++            secretName: octavia-etc
++            defaultMode: 0444
++{{ if $mounts_octavia_api.volumes }}{{ toYaml $mounts_octavia_api.volumes | indent 8 }}{{ end }}
++{{- end }}
+diff --git a/octavia/templates/deployment-housekeeping.yaml b/octavia/templates/deployment-housekeeping.yaml
+new file mode 100644
+index 0000000..3cba2f0
+--- /dev/null
++++ b/octavia/templates/deployment-housekeeping.yaml
+@@ -0,0 +1,99 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.deployment_housekeeping }}
++{{- $envAll := . }}
++
++{{- $mounts_octavia_housekeeping := .Values.pod.mounts.octavia_housekeeping.octavia_housekeeping }}
++{{- $mounts_octavia_housekeeping_init := .Values.pod.mounts.octavia_housekeeping.init_container }}
++
++{{- $serviceAccountName := "octavia-housekeeping" }}
++{{ tuple $envAll "housekeeping" $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
++---
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: octavia-housekeeping
++  annotations:
++    {{ tuple $envAll | include "helm-toolkit.snippets.release_uuid" }}
++  labels:
++{{ tuple $envAll "octavia" "housekeeping" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
++spec:
++  replicas: {{ .Values.pod.replicas.housekeeping }}
++  selector:
++    matchLabels:
++{{ tuple $envAll "octavia" "housekeeping" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 6 }}
++{{ tuple $envAll | include "helm-toolkit.snippets.kubernetes_upgrades_deployment" | indent 2 }}
++  template:
++    metadata:
++      labels:
++{{ tuple $envAll "octavia" "housekeeping" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
++      annotations:
++        configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
++        configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
++    spec:
++      serviceAccountName: {{ $serviceAccountName }}
++      hostNetwork: true
++      affinity:
++{{ tuple $envAll "octavia" "housekeeping" | include "helm-toolkit.snippets.kubernetes_pod_anti_affinity" | indent 8 }}
++      nodeSelector:
++        {{ .Values.labels.housekeeping.node_selector_key }}: {{ .Values.labels.housekeeping.node_selector_value }}
++      initContainers:
++{{ tuple $envAll "housekeeping" $mounts_octavia_housekeeping_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
++      containers:
++        - name: octavia-housekeeping
++{{ tuple $envAll "octavia_housekeeping" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.housekeeping | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          securityContext:
++            runAsUser: {{ .Values.pod.user.octavia.uid }}
++          command:
++            - /tmp/octavia-housekeeping.sh
++            - start
++          lifecycle:
++            preStop:
++              exec:
++                command:
++                  - /tmp/octavia-housekeeping.sh
++                  - stop
++          volumeMounts:
++            - name: pod-etc-octavia
++              mountPath: /etc/octavia
++            - name: octavia-bin
++              mountPath: /tmp/octavia-housekeeping.sh
++              subPath: octavia-housekeeping.sh
++              readOnly: true
++            - name: octavia-etc
++              mountPath: /etc/octavia/octavia.conf
++              subPath: octavia.conf
++              readOnly: true
++            - name: octavia-etc
++              mountPath: {{ .Values.conf.octavia.DEFAULT.log_config_append }}
++              subPath: {{ base .Values.conf.octavia.DEFAULT.log_config_append }}
++              readOnly: true
++{{ if $mounts_octavia_housekeeping.volumeMounts }}{{ toYaml $mounts_octavia_housekeeping.volumeMounts | indent 12 }}{{ end }}
++      volumes:
++        - name: pod-etc-octavia
++          emptyDir: {}
++        - name: octavia-bin
++          configMap:
++            name: octavia-bin
++            defaultMode: 0555
++        - name: octavia-etc
++          secret:
++            secretName: octavia-etc
++            defaultMode: 0444
++{{ if $mounts_octavia_housekeeping.volumes }}{{ toYaml $mounts_octavia_housekeeping.volumes | indent 8 }}{{ end }}
++{{- end }}
+diff --git a/octavia/templates/deployment-worker.yaml b/octavia/templates/deployment-worker.yaml
+new file mode 100644
+index 0000000..583dbf4
+--- /dev/null
++++ b/octavia/templates/deployment-worker.yaml
+@@ -0,0 +1,100 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.deployment_worker }}
++{{- $envAll := . }}
++
++{{- $mounts_octavia_worker := .Values.pod.mounts.octavia_worker.octavia_worker }}
++{{- $mounts_octavia_worker_init := .Values.pod.mounts.octavia_worker.init_container }}
++
++{{- $serviceAccountName := "octavia-worker" }}
++{{ tuple $envAll "worker" $serviceAccountName | include "helm-toolkit.snippets.kubernetes_pod_rbac_serviceaccount" }}
++---
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: octavia-worker
++  annotations:
++    {{ tuple $envAll | include "helm-toolkit.snippets.release_uuid" }}
++  labels:
++{{ tuple $envAll "octavia" "worker" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
++spec:
++  replicas: {{ .Values.pod.replicas.worker }}
++  selector:
++    matchLabels:
++{{ tuple $envAll "octavia" "worker" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 6 }}
++{{ tuple $envAll | include "helm-toolkit.snippets.kubernetes_upgrades_deployment" | indent 2 }}
++  template:
++    metadata:
++      labels:
++{{ tuple $envAll "octavia" "worker" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 8 }}
++      annotations:
++        configmap-bin-hash: {{ tuple "configmap-bin.yaml" . | include "helm-toolkit.utils.hash" }}
++        configmap-etc-hash: {{ tuple "configmap-etc.yaml" . | include "helm-toolkit.utils.hash" }}
++    spec:
++      serviceAccountName: {{ $serviceAccountName }}
++      dnsPolicy: ClusterFirstWithHostNet
++      hostNetwork: true
++      affinity:
++{{ tuple $envAll "octavia" "worker" | include "helm-toolkit.snippets.kubernetes_pod_anti_affinity" | indent 8 }}
++      nodeSelector:
++        {{ .Values.labels.worker.node_selector_key }}: {{ .Values.labels.worker.node_selector_value }}
++      initContainers:
++{{ tuple $envAll "worker" $mounts_octavia_worker_init | include "helm-toolkit.snippets.kubernetes_entrypoint_init_container" | indent 8 }}
++      containers:
++        - name: octavia-worker
++{{ tuple $envAll "octavia_worker" | include "helm-toolkit.snippets.image" | indent 10 }}
++{{ tuple $envAll $envAll.Values.pod.resources.worker | include "helm-toolkit.snippets.kubernetes_resources" | indent 10 }}
++          securityContext:
++            runAsUser: {{ .Values.pod.user.octavia.uid }}
++          command:
++            - /tmp/octavia-worker.sh
++            - start
++          lifecycle:
++            preStop:
++              exec:
++                command:
++                  - /tmp/octavia-worker.sh
++                  - stop
++          volumeMounts:
++            - name: pod-etc-octavia
++              mountPath: /etc/octavia
++            - name: octavia-bin
++              mountPath: /tmp/octavia-worker.sh
++              subPath: octavia-worker.sh
++              readOnly: true
++            - name: octavia-etc
++              mountPath: /etc/octavia/octavia.conf
++              subPath: octavia.conf
++              readOnly: true
++            - name: octavia-etc
++              mountPath: {{ .Values.conf.octavia.DEFAULT.log_config_append }}
++              subPath: {{ base .Values.conf.octavia.DEFAULT.log_config_append }}
++              readOnly: true
++{{ if $mounts_octavia_worker.volumeMounts }}{{ toYaml $mounts_octavia_worker.volumeMounts | indent 12 }}{{ end }}
++      volumes:
++        - name: pod-etc-octavia
++          emptyDir: {}
++        - name: octavia-bin
++          configMap:
++            name: octavia-bin
++            defaultMode: 0555
++        - name: octavia-etc
++          secret:
++            secretName: octavia-etc
++            defaultMode: 0444
++{{ if $mounts_octavia_worker.volumes }}{{ toYaml $mounts_octavia_worker.volumes | indent 8 }}{{ end }}
++{{- end }}
+\ No newline at end of file
+diff --git a/octavia/templates/ingress-api.yaml b/octavia/templates/ingress-api.yaml
+new file mode 100644
+index 0000000..c644e67
+--- /dev/null
++++ b/octavia/templates/ingress-api.yaml
+@@ -0,0 +1,21 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if and .Values.manifests.ingress_api .Values.network.api.ingress.public }}
++{{- $ingressOpts := dict "envAll" . "backendServiceType" "load_balancer" "backendPort" "o-api" -}}
++{{ $ingressOpts | include "helm-toolkit.manifests.ingress" }}
++{{- end }}
++
+diff --git a/octavia/templates/job-bootstrap.yaml b/octavia/templates/job-bootstrap.yaml
+new file mode 100644
+index 0000000..cf7bdb7
+--- /dev/null
++++ b/octavia/templates/job-bootstrap.yaml
+@@ -0,0 +1,21 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++
++{{- if and .Values.manifests.job_bootstrap .Values.bootstrap.enabled }}
++{{- $bootstrapJob := dict "envAll" . "serviceName" "octavia" "keystoneUser" .Values.bootstrap.ks_user "logConfigFile" .Values.conf.octavia.DEFAULT.log_config_append -}}
++{{ $bootstrapJob | include "helm-toolkit.manifests.job_bootstrap" }}
++{{- end }}
+diff --git a/octavia/templates/job-db-drop.yaml b/octavia/templates/job-db-drop.yaml
+new file mode 100644
+index 0000000..1975d7d
+--- /dev/null
++++ b/octavia/templates/job-db-drop.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_db_drop }}
++{{- $dbDropJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $dbDropJob | include "helm-toolkit.manifests.job_db_drop_mysql" }}
++{{- end }}
+diff --git a/octavia/templates/job-db-init.yaml b/octavia/templates/job-db-init.yaml
+new file mode 100644
+index 0000000..77d4008
+--- /dev/null
++++ b/octavia/templates/job-db-init.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_db_init }}
++{{- $dbInitJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $dbInitJob | include "helm-toolkit.manifests.job_db_init_mysql" }}
++{{- end }}
+diff --git a/octavia/templates/job-db-sync.yaml b/octavia/templates/job-db-sync.yaml
+new file mode 100644
+index 0000000..a5d40b7
+--- /dev/null
++++ b/octavia/templates/job-db-sync.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_db_sync }}
++{{- $dbSyncJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $dbSyncJob | include "helm-toolkit.manifests.job_db_sync" }}
++{{- end }}
+diff --git a/octavia/templates/job-image-repo-sync.yaml b/octavia/templates/job-image-repo-sync.yaml
+new file mode 100644
+index 0000000..ebe35e2
+--- /dev/null
++++ b/octavia/templates/job-image-repo-sync.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if and .Values.manifests.job_image_repo_sync .Values.images.local_registry.active }}
++{{- $imageRepoSyncJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $imageRepoSyncJob | include "helm-toolkit.manifests.job_image_repo_sync" }}
++{{- end }}
+diff --git a/octavia/templates/job-ks-endpoint.yaml b/octavia/templates/job-ks-endpoint.yaml
+new file mode 100644
+index 0000000..83aeeeb
+--- /dev/null
++++ b/octavia/templates/job-ks-endpoint.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_ks_endpoints }}
++{{- $ksServiceJob := dict "envAll" . "serviceName" "octavia" "serviceTypes" ( tuple "load-balancer" ) -}}
++{{ $ksServiceJob | include "helm-toolkit.manifests.job_ks_endpoints" }}
++{{- end }}
+diff --git a/octavia/templates/job-ks-service.yaml b/octavia/templates/job-ks-service.yaml
+new file mode 100644
+index 0000000..b10d137
+--- /dev/null
++++ b/octavia/templates/job-ks-service.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_ks_service }}
++{{- $ksServiceJob := dict "envAll" . "serviceName" "octavia" "serviceTypes" ( tuple "load-balancer" ) -}}
++{{ $ksServiceJob | include "helm-toolkit.manifests.job_ks_service" }}
++{{- end }}
+diff --git a/octavia/templates/job-ks-user.yaml b/octavia/templates/job-ks-user.yaml
+new file mode 100644
+index 0000000..ec0875f
+--- /dev/null
++++ b/octavia/templates/job-ks-user.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.job_ks_user }}
++{{- $ksUserJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $ksUserJob | include "helm-toolkit.manifests.job_ks_user" }}
++{{- end }}
+diff --git a/octavia/templates/job-rabbit-init.yaml b/octavia/templates/job-rabbit-init.yaml
+new file mode 100644
+index 0000000..4c33309
+--- /dev/null
++++ b/octavia/templates/job-rabbit-init.yaml
+@@ -0,0 +1,19 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++{{- if .Values.manifests.job_rabbit_init }}
++{{- $rmqUserJob := dict "envAll" . "serviceName" "octavia" -}}
++{{ $rmqUserJob | include "helm-toolkit.manifests.job_rabbit_init" }}
++{{- end }}
+diff --git a/octavia/templates/network_policy.yaml b/octavia/templates/network_policy.yaml
+new file mode 100644
+index 0000000..f5706ee
+--- /dev/null
++++ b/octavia/templates/network_policy.yaml
+@@ -0,0 +1,18 @@
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++{{- if .Values.manifests.network_policy -}}
++{{- $netpol_opts := dict "envAll" . "name" "application" "label" "octavia" -}}
++{{ $netpol_opts | include "helm-toolkit.manifests.kubernetes_network_policy" }}
++{{- end -}}
+diff --git a/octavia/templates/pdb-api.yaml b/octavia/templates/pdb-api.yaml
+new file mode 100644
+index 0000000..a2e03ec
+--- /dev/null
++++ b/octavia/templates/pdb-api.yaml
+@@ -0,0 +1,29 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.pdb_api }}
++{{- $envAll := . }}
++---
++apiVersion: policy/v1beta1
++kind: PodDisruptionBudget
++metadata:
++  name: octavia-api
++spec:
++  minAvailable: {{ .Values.pod.lifecycle.disruption_budget.api.min_available }}
++  selector:
++    matchLabels:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 6 }}
++{{- end }}
+diff --git a/octavia/templates/secret-db.yaml b/octavia/templates/secret-db.yaml
+new file mode 100644
+index 0000000..b2c3199
+--- /dev/null
++++ b/octavia/templates/secret-db.yaml
+@@ -0,0 +1,30 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.secret_db }}
++{{- $envAll := . }}
++{{- range $key1, $userClass := tuple "admin" "octavia" }}
++{{- $secretName := index $envAll.Values.secrets.oslo_db $userClass }}
++---
++apiVersion: v1
++kind: Secret
++metadata:
++  name: {{ $secretName }}
++type: Opaque
++data:
++  DB_CONNECTION: {{ tuple "oslo_db" "internal" $userClass "mysql" $envAll | include "helm-toolkit.endpoints.authenticated_endpoint_uri_lookup" | b64enc -}}
++{{- end }}
++{{- end }}
+diff --git a/octavia/templates/secret-ingress-tls.yaml b/octavia/templates/secret-ingress-tls.yaml
+new file mode 100644
+index 0000000..8d154ff
+--- /dev/null
++++ b/octavia/templates/secret-ingress-tls.yaml
+@@ -0,0 +1,19 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.secret_ingress_tls }}
++{{- include "helm-toolkit.manifests.secret_ingress_tls" ( dict "envAll" . "backendServiceType" "load_balancer" ) }}
++{{- end }}
+diff --git a/octavia/templates/secret-keystone.yaml b/octavia/templates/secret-keystone.yaml
+new file mode 100644
+index 0000000..f2883e0
+--- /dev/null
++++ b/octavia/templates/secret-keystone.yaml
+@@ -0,0 +1,30 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.secret_keystone }}
++{{- $envAll := . }}
++{{- range $key1, $userClass := tuple "admin" "octavia" "test" }}
++{{- $secretName := index $envAll.Values.secrets.identity $userClass }}
++---
++apiVersion: v1
++kind: Secret
++metadata:
++  name: {{ $secretName }}
++type: Opaque
++data:
++{{- tuple $userClass "internal" $envAll | include "helm-toolkit.snippets.keystone_secret_openrc" | indent 2 -}}
++{{- end }}
++{{- end }}
+diff --git a/octavia/templates/secret-rabbitmq.yaml b/octavia/templates/secret-rabbitmq.yaml
+new file mode 100644
+index 0000000..4ebd44d
+--- /dev/null
++++ b/octavia/templates/secret-rabbitmq.yaml
+@@ -0,0 +1,30 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.secret_rabbitmq }}
++{{- $envAll := . }}
++{{- range $key1, $userClass := tuple "admin" "octavia" }}
++{{- $secretName := index $envAll.Values.secrets.oslo_messaging $userClass }}
++---
++apiVersion: v1
++kind: Secret
++metadata:
++  name: {{ $secretName }}
++type: Opaque
++data:
++  RABBITMQ_CONNECTION: {{ tuple "oslo_messaging" "internal" $userClass "http" $envAll | include "helm-toolkit.endpoints.authenticated_endpoint_uri_lookup" | b64enc }}
++{{- end }}
++{{- end }}
+diff --git a/octavia/templates/service-api.yaml b/octavia/templates/service-api.yaml
+new file mode 100644
+index 0000000..3e298e6
+--- /dev/null
++++ b/octavia/templates/service-api.yaml
+@@ -0,0 +1,36 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if .Values.manifests.service_api }}
++{{- $envAll := . }}
++---
++apiVersion: v1
++kind: Service
++metadata:
++  name: {{ tuple "load_balancer" "internal" . | include "helm-toolkit.endpoints.hostname_short_endpoint_lookup" }}
++spec:
++  ports:
++    - name: o-api
++      port: {{ tuple "load_balancer" "internal" "api" . | include "helm-toolkit.endpoints.endpoint_port_lookup" }}
++    {{ if .Values.network.api.node_port.enabled }}
++      nodePort: {{ .Values.network.api.node_port.port }}
++    {{ end }}
++  selector:
++{{ tuple $envAll "octavia" "api" | include "helm-toolkit.snippets.kubernetes_metadata_labels" | indent 4 }}
++  {{ if .Values.network.api.node_port.enabled }}
++  type: NodePort
++  {{ end }}
++{{- end }}
+diff --git a/octavia/templates/service-ingress-api.yaml b/octavia/templates/service-ingress-api.yaml
+new file mode 100644
+index 0000000..a7a2592
+--- /dev/null
++++ b/octavia/templates/service-ingress-api.yaml
+@@ -0,0 +1,20 @@
++{{/*
++Copyright 2019 Samsung Electronics Co., Ltd.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++   http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/}}
++
++{{- if and .Values.manifests.service_ingress_api .Values.network.api.ingress.public }}
++{{- $serviceIngressOpts := dict "envAll" . "backendServiceType" "load_balancer" -}}
++{{ $serviceIngressOpts | include "helm-toolkit.manifests.service_ingress" }}
++{{- end }}
+diff --git a/octavia/values.yaml b/octavia/values.yaml
+new file mode 100644
+index 0000000..37f7e7f
+--- /dev/null
++++ b/octavia/values.yaml
+@@ -0,0 +1,681 @@
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++# Licensed under the Apache License, Version 2.0 (the "License");
++# you may not use this file except in compliance with the License.
++# You may obtain a copy of the License at
++#
++#     http://www.apache.org/licenses/LICENSE-2.0
++#
++# Unless required by applicable law or agreed to in writing, software
++# distributed under the License is distributed on an "AS IS" BASIS,
++# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++# See the License for the specific language governing permissions and
++# limitations under the License.
++
++# Default values for octavia.
++# This is a YAML-formatted file.
++# Declare name/value pairs to be passed into your templates.
++# name: value
++
++release_group: null
++
++labels:
++  api:
++    node_selector_key: openstack-control-plane
++    node_selector_value: enabled
++  worker:
++    node_selector_key: openstack-control-plane
++    node_selector_value: enabled
++  housekeeping:
++    node_selector_key: openstack-control-plane
++    node_selector_value: enabled
++  health_manager:
++    node_selector_key: openstack-control-plane
++    node_selector_value: enabled
++  job:
++    node_selector_key: openstack-control-plane
++    node_selector_value: enabled
++
++images:
++  tags:
++    test: docker.io/xrally/xrally-openstack:1.3.0
++    bootstrap: docker.io/openstackhelm/heat:ocata
++    db_init: docker.io/openstackhelm/heat:ocata
++    octavia_db_sync: docker.io/loci/octavia:master-ubuntu
++    db_drop: docker.io/openstackhelm/heat:ocata
++    rabbit_init: docker.io/rabbitmq:3.7-management
++    ks_user: docker.io/openstackhelm/heat:ocata
++    ks_service: docker.io/openstackhelm/heat:ocata
++    ks_endpoints: docker.io/openstackhelm/heat:ocata
++    dep_check: quay.io/stackanetes/kubernetes-entrypoint:v0.3.1
++    image_repo_sync: docker.io/docker:17.07.0
++    octavia_api: docker.io/loci/octavia:master-ubuntu
++    octavia_worker: docker.io/loci/octavia:master-ubuntu
++    octavia_housekeeping: docker.io/loci/octavia:master-ubuntu
++    octavia_health_manager: docker.io/loci/octavia:master-ubuntu
++    octavia_health_manager_init: docker.io/kolla/ubuntu-source-octavia-health-manager:rocky
++    openvswitch_vswitchd: docker.io/kolla/centos-source-openvswitch-vswitchd:rocky
++  pull_policy: "IfNotPresent"
++  local_registry:
++    active: false
++    exclude:
++      - dep_check
++      - image_repo_sync
++
++bootstrap:
++  enabled: true
++  ks_user: admin
++  script: |
++    openstack role create --or-show load-balancer_admin
++    openstack role create --or-show load-balancer_observer
++    openstack role create --or-show load-balancer_global_observer
++    openstack role create --or-show load-balancer_quota_admin
++    openstack role create --or-show load-balancer_member
++
++network:
++  api:
++    ingress:
++      public: true
++      classes:
++        namespace: "nginx"
++        cluster: "nginx-cluster"
++      annotations:
++        nginx.ingress.kubernetes.io/rewrite-target: /
++    external_policy_local: false
++    node_port:
++      enabled: false
++      port: 30826
++
++dependencies:
++  dynamic:
++    common:
++      local_image_registry:
++        jobs:
++          - heat-image-repo-sync
++        services:
++          - endpoint: node
++            service: local_image_registry
++  static:
++    api:
++      jobs:
++        - octavia-db-sync
++        - octavia-ks-user
++        - octavia-ks-endpoints
++        - octavia-rabbit-init
++      services:
++        - endpoint: internal
++          service: oslo_db
++        - endpoint: internal
++          service: identity
++        - endpoint: internal
++          service: oslo_messaging
++        - endpoint: internal
++          service: oslo_cache
++        - endpoint: internal
++          service: network
++    worker:
++      jobs:
++        - octavia-db-sync
++        - octavia-ks-user
++        - octavia-ks-endpoints
++        - octavia-rabbit-init
++      services:
++        - endpoint: internal
++          service: oslo_db
++        - endpoint: internal
++          service: identity
++        - endpoint: internal
++          service: oslo_messaging
++        - endpoint: internal
++          service: oslo_cache
++        - endpoint: internal
++          service: network
++        - endpoint: internal
++          service: load_balancer
++    housekeeping:
++      jobs:
++        - octavia-db-sync
++        - octavia-ks-user
++        - octavia-ks-endpoints
++        - octavia-rabbit-init
++      services:
++        - endpoint: internal
++          service: oslo_db
++        - endpoint: internal
++          service: identity
++        - endpoint: internal
++          service: oslo_messaging
++        - endpoint: internal
++          service: oslo_cache
++        - endpoint: internal
++          service: network
++        - endpoint: internal
++          service: load_balancer
++    health_manager:
++      jobs:
++        - octavia-db-sync
++        - octavia-ks-user
++        - octavia-ks-endpoints
++        - octavia-rabbit-init
++      services:
++        - endpoint: internal
++          service: oslo_db
++        - endpoint: internal
++          service: identity
++        - endpoint: internal
++          service: oslo_messaging
++        - endpoint: internal
++          service: oslo_cache
++        - endpoint: internal
++          service: network
++        - endpoint: internal
++          service: load_balancer
++    db_init:
++      services:
++        - endpoint: internal
++          service: oslo_db
++    db_sync:
++      jobs:
++        - octavia-db-init
++      services:
++        - endpoint: internal
++          service: oslo_db
++    ks_endpoints:
++      jobs:
++        - octavia-ks-service
++      services:
++        - endpoint: internal
++          service: identity
++    ks_service:
++      services:
++        - endpoint: internal
++          service: identity
++    ks_user:
++      services:
++        - endpoint: internal
++          service: identity
++    rabbit_init:
++      services:
++      - endpoint: internal
++        service: oslo_messaging
++    image_repo_sync:
++      services:
++        - endpoint: internal
++          service: local_image_registry
++
++conf:
++  octavia:
++    DEFAULT:
++      log_config_append: /etc/octavia/logging.conf
++    api_settings:
++      api_handler: queue_producer
++      bind_host: 0.0.0.0
++    database:
++      max_retries: -1
++    health_manager:
++      bind_port: 5555
++      bind_ip: 0.0.0.0
++      controller_ip_port_list: 0.0.0.0:5555
++      heartbeat_key: insecure
++    keystone_authtoken:
++      auth_type: password
++      auth_version: v3
++      memcache_security_strategy: ENCRYPT
++    certificates:
++      ca_private_key_passphrase: foobar
++      ca_private_key: /etc/octavia/certs/private/cakey.pem
++      ca_certificate: /etc/octavia/certs/ca_01.pem
++    haproxy_amphora:
++      server_ca: /etc/octavia/certs/ca_01.pem
++      client_cert: /etc/octavia/certs/client.pem
++      base_path: /var/lib/octavia
++      base_cert_dir: /var/lib/octavia/certs
++      connection_max_retries: 1500
++      connection_retry_interval: 1
++      rest_request_conn_timeout: 10
++      rest_request_read_timeout: 120
++    controller_worker:
++      amp_image_owner_id: null
++      amp_secgroup_list: null
++      amp_flavor_id: null
++      amp_boot_network_list: null
++      amp_ssh_key_name: octavia_ssh_key
++      amp_image_tag: amphora
++      network_driver: allowed_address_pairs_driver
++      compute_driver: compute_nova_driver
++      amphora_driver: amphora_haproxy_rest_driver
++      workers: 2
++      amp_active_retries: 100
++      amp_active_wait_sec: 2
++      loadbalancer_topology: SINGLE
++    oslo_messaging:
++      topic: octavia_prov
++      rpc_thread_pool_size: 2
++    oslo_messaging_notifications:
++      driver: messagingv2
++    house_keeping:
++      load_balancer_expiry_age: 3600
++      amphora_expiry_age: 3600
++    service_auth:
++      auth_type: password
++      cafile: ""
++      auth_version: v3
++      memcache_security_strategy: ENCRYPT
++  logging:
++    loggers:
++      keys:
++        - root
++        - octavia
++    handlers:
++      keys:
++        - stdout
++        - stderr
++        - "null"
++    formatters:
++      keys:
++        - context
++        - default
++    logger_root:
++      level: WARNING
++      handlers: 'null'
++    logger_octavia:
++      level: WARNING
++      handlers:
++        - stdout
++      qualname: octavia
++    logger_amqp:
++      level: WARNING
++      handlers: stderr
++      qualname: amqp
++    logger_amqplib:
++      level: WARNING
++      handlers: stderr
++      qualname: amqplib
++    logger_eventletwsgi:
++      level: WARNING
++      handlers: stderr
++      qualname: eventlet.wsgi.server
++    logger_sqlalchemy:
++      level: WARNING
++      handlers: stderr
++      qualname: sqlalchemy
++    logger_boto:
++      level: WARNING
++      handlers: stderr
++      qualname: boto
++    handler_null:
++      class: logging.NullHandler
++      formatter: default
++      args: ()
++    handler_stdout:
++      class: StreamHandler
++      args: (sys.stdout,)
++      formatter: context
++    handler_stderr:
++      class: StreamHandler
++      args: (sys.stderr,)
++      formatter: context
++    formatter_context:
++      class: oslo_log.formatters.ContextFormatter
++    formatter_default:
++      format: "%(message)s"
++  rabbitmq:
++    #NOTE(rk760n): adding rmq policy to mirror messages from notification queues and set expiration time for the ones
++    policies:
++      - vhost: "octavia"
++        name: "ha_ttl_octavia"
++        definition:
++          #mirror messges to other nodes in rmq cluster
++          ha-mode: "all"
++          ha-sync-mode: "automatic"
++          #70s
++          message-ttl: 70000
++        priority: 0
++        apply-to: all
++        pattern: '(notifications)\.'
++
++secrets:
++  identity:
++    admin: octavia-keystone-admin
++    octavia: octavia-keystone-user
++    test: octavia-keystone-test
++  oslo_db:
++    admin: octavia-db-admin
++    octavia: octavia-db-user
++  oslo_messaging:
++    admin: octavia-rabbitmq-admin
++    octavia: octavia-rabbitmq-user
++  tls:
++    load_balancer:
++      api:
++        public: octavia-tls-public
++
++endpoints:
++  cluster_domain_suffix: cluster.local
++  local_image_registry:
++    name: docker-registry
++    namespace: docker-registry
++    hosts:
++      default: localhost
++      internal: docker-registry
++      node: localhost
++    host_fqdn_override:
++      default: null
++    port:
++      registry:
++        node: 5000
++  identity:
++    name: keystone
++    auth:
++      admin:
++        region_name: RegionOne
++        username: admin
++        password: password
++        project_name: admin
++        user_domain_name: default
++        project_domain_name: default
++      octavia:
++        role: admin
++        region_name: RegionOne
++        username: octavia
++        password: password
++        project_name: service
++        user_domain_name: service
++        project_domain_name: service
++      test:
++        role: admin
++        region_name: RegionOne
++        username: test
++        password: password
++        project_name: test
++        user_domain_name: service
++        project_domain_name: service
++    hosts:
++      default: keystone
++      internal: keystone-api
++    host_fqdn_override:
++      default: null
++    path:
++      default: /v3
++    scheme:
++      default: 'http'
++    port:
++      api:
++        default: 80
++        internal: 5000
++  load_balancer:
++    name: octavia
++    hosts:
++      default: octavia-api
++      public: octavia
++    host_fqdn_override:
++      default: null
++    path:
++      default: null
++    scheme:
++      default: http
++    port:
++      api:
++        default: 9876
++        public: 80
++  oslo_db:
++    auth:
++      admin:
++        username: root
++        password: password
++      octavia:
++        username: octavia
++        password: password
++    hosts:
++      default: mariadb
++    host_fqdn_override:
++      default: null
++    path: /octavia
++    scheme: mysql+pymysql
++    port:
++      mysql:
++        default: 3306
++  oslo_cache:
++    auth:
++      # NOTE(portdirect): this is used to define the value for keystone
++      # authtoken cache encryption key, if not set it will be populated
++      # automatically with a random value, but to take advantage of
++      # this feature all services should be set to use the same key,
++      # and memcache service.
++      memcache_secret_key: null
++    hosts:
++      default: memcached
++    host_fqdn_override:
++      default: null
++    port:
++      memcache:
++        default: 11211
++  oslo_messaging:
++    auth:
++      admin:
++        username: rabbitmq
++        password: password
++      octavia:
++        username: octavia
++        password: password
++    hosts:
++      default: rabbitmq
++    host_fqdn_override:
++      default: null
++    path: /octavia
++    scheme: rabbit
++    port:
++      amqp:
++        default: 5672
++      http:
++        default: 15672
++  network:
++    name: neutron
++    hosts:
++      default: neutron-server
++      public: neutron
++    host_fqdn_override:
++      default: null
++    path:
++      default: null
++    scheme:
++      default: 'http'
++    port:
++      api:
++        default: 9696
++        public: 80
++
++pod:
++  user:
++    octavia:
++      uid: 42424
++  affinity:
++    anti:
++      type:
++        default: preferredDuringSchedulingIgnoredDuringExecution
++      topologyKey:
++        default: kubernetes.io/hostname
++  mounts:
++    octavia_api:
++      init_container: null
++      octavia_api:
++        volumeMounts:
++        volumes:
++    octavia_worker:
++      init_container: null
++      octavia_worker:
++        volumeMounts:
++        volumes:
++    octavia_housekeeping:
++      init_container: null
++      octavia_housekeeping:
++        volumeMounts:
++        volumes:
++    octavia_health_manager:
++      init_container: null
++      octavia_health_manager:
++        volumeMounts:
++        volumes:
++    octavia_bootstrap:
++      init_container: null
++      octavia_bootstrap:
++        volumeMounts:
++        volumes:
++  replicas:
++    api: 1
++    worker: 1
++    housekeeping: 1
++  lifecycle:
++    upgrades:
++      deployments:
++        revision_history: 3
++        pod_replacement_strategy: RollingUpdate
++        rolling_update:
++          max_unavailable: 1
++          max_surge: 3
++      daemonsets:
++        pod_replacement_strategy: RollingUpdate
++        health_manager:
++          enabled: true
++          min_ready_seconds: 0
++          max_unavailable: 1
++    disruption_budget:
++      api:
++        min_available: 0
++    termination_grace_period:
++      api:
++        timeout: 30
++  resources:
++    enabled: false
++    api:
++      requests:
++        memory: "128Mi"
++        cpu: "100m"
++      limits:
++        memory: "1024Mi"
++        cpu: "2000m"
++    worker:
++      requests:
++        memory: "128Mi"
++        cpu: "100m"
++      limits:
++        memory: "1024Mi"
++        cpu: "2000m"
++    housekeeping:
++      requests:
++        memory: "128Mi"
++        cpu: "100m"
++      limits:
++        memory: "1024Mi"
++        cpu: "2000m"
++    health_manager:
++      requests:
++        memory: "128Mi"
++        cpu: "100m"
++      limits:
++        memory: "1024Mi"
++        cpu: "2000m"
++    jobs:
++      bootstrap:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      rabbit_init:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      db_init:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      db_sync:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      db_drop:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      ks_endpoints:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      ks_service:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      ks_user:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      tests:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++      image_repo_sync:
++        requests:
++          memory: "128Mi"
++          cpu: "100m"
++        limits:
++          memory: "1024Mi"
++          cpu: "2000m"
++
++network_policy:
++  octavia:
++    ingress:
++      - {}
++
++manifests:
++  configmap_bin: true
++  configmap_etc: true
++  daemonset_health_manager: true
++  deployment_api: true
++  deployment_worker: true
++  deployment_housekeeping: true
++  ingress_api: true
++  job_bootstrap: true
++  job_db_init: true
++  job_db_sync: true
++  job_db_drop: false
++  job_image_repo_sync: true
++  job_rabbit_init: true
++  job_ks_endpoints: true
++  job_ks_service: true
++  job_ks_user: true
++  pdb_api: true
++  pod_rally_test: false
++  network_policy: false
++  secret_credential_keys: true
++  secret_db: true
++  secret_ingress_tls: true
++  secret_keystone: true
++  secret_rabbitmq: true
++  service_ingress_api: true
++  service_api: true
+diff --git a/tools/deployment/developer/ceph/180-create-resource-for-octavia.sh b/tools/deployment/developer/ceph/180-create-resource-for-octavia.sh
+new file mode 120000
+index 0000000..770ddd4
+--- /dev/null
++++ b/tools/deployment/developer/ceph/180-create-resource-for-octavia.sh
+@@ -0,0 +1 @@
++../common/180-create-resource-for-octavia.sh
+\ No newline at end of file
+diff --git a/tools/deployment/developer/ceph/190-create-octavia-certs.sh b/tools/deployment/developer/ceph/190-create-octavia-certs.sh
+new file mode 120000
+index 0000000..3cc57c1
+--- /dev/null
++++ b/tools/deployment/developer/ceph/190-create-octavia-certs.sh
+@@ -0,0 +1 @@
++../common/190-create-octavia-certs.sh
+\ No newline at end of file
+diff --git a/tools/deployment/developer/ceph/200-octavia.sh b/tools/deployment/developer/ceph/200-octavia.sh
+new file mode 120000
+index 0000000..003324d
+--- /dev/null
++++ b/tools/deployment/developer/ceph/200-octavia.sh
+@@ -0,0 +1 @@
++../common/200-octavia.sh
+\ No newline at end of file
+diff --git a/tools/deployment/developer/common/180-create-resource-for-octavia.sh b/tools/deployment/developer/common/180-create-resource-for-octavia.sh
+new file mode 100755
+index 0000000..9ab48a9
+--- /dev/null
++++ b/tools/deployment/developer/common/180-create-resource-for-octavia.sh
+@@ -0,0 +1,84 @@
++#!/bin/bash
++
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++#    Licensed under the Apache License, Version 2.0 (the "License"); you may
++#    not use this file except in compliance with the License. You may obtain
++#    a copy of the License at
++#
++#         http://www.apache.org/licenses/LICENSE-2.0
++#
++#    Unless required by applicable law or agreed to in writing, software
++#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++#    License for the specific language governing permissions and limitations
++#    under the License.
++
++set -xe
++
++export OS_CLOUD=openstack_helm
++
++: ${OSH_LB_SUBNET:="172.31.0.0/24"}
++: ${OSH_LB_SUBNET_START:="172.31.0.2"}
++: ${OSH_LB_SUBNET_END="172.31.0.200"}
++: ${OSH_LB_AMPHORA_IMAGE_NAME:="amphora-x64-haproxy"}
++: ${OSH_AMPHORA_IMAGE_FILE_PATH:=""}
++
++sudo pip install python-octaviaclient==1.6.0
++
++# NOTE(hagun.kim): These resources are required to use Octavia service.
++
++# Create Octavia management network and its security group
++openstack network create lb-mgmt-net -f value -c id
++openstack subnet create --subnet-range $OSH_LB_SUBNET --allocation-pool start=$OSH_LB_SUBNET_START,end=$OSH_LB_SUBNET_END --network lb-mgmt-net lb-mgmt-subnet -f value -c id
++openstack security group create lb-mgmt-sec-grp
++openstack security group rule create --protocol icmp lb-mgmt-sec-grp
++openstack security group rule create --protocol tcp --dst-port 22 lb-mgmt-sec-grp
++openstack security group rule create --protocol tcp --dst-port 9443 lb-mgmt-sec-grp
++
++# Create security group for Octavia health manager
++openstack security group create lb-health-mgr-sec-grp
++openstack security group rule create --protocol udp --dst-port 5555 lb-health-mgr-sec-grp
++
++# Create ports for health manager (octavia-health-manager-port-{KUBE_NODE_NAME})
++# octavia-health-manager pod will be run on each controller node as daemonset.
++# The pod will create o-hm0 NIC to each controller node.
++# Each o-hm0 NIC uses the IP of these ports.
++CONTROLLER_IP_PORT_LIST=''
++CTRLS=$(kubectl get nodes -l openstack-control-plane=enabled -o name | awk -F"/" '{print $2}')
++for node in $CTRLS
++do
++  PORTNAME=octavia-health-manager-port-$node
++  openstack port create --security-group lb-health-mgr-sec-grp --device-owner Octavia:health-mgr --host=$node -c id -f value --network lb-mgmt-net $PORTNAME
++  IP=$(openstack port show $PORTNAME -c fixed_ips -f value | awk -F',' '{print $1}' | awk -F'=' '{print $2}' | tr -d \')
++  if [ -z $CONTROLLER_IP_PORT_LIST ]; then
++    CONTROLLER_IP_PORT_LIST=$IP:5555
++  else
++    CONTROLLER_IP_PORT_LIST=$CONTROLLER_IP_PORT_LIST,$IP:5555
++  fi
++done
++
++# Each health manager information should be passed into octavia configuration.
++echo $CONTROLLER_IP_PORT_LIST > /tmp/octavia_hm_controller_ip_port_list
++
++# Create a flavor for amphora instance
++openstack flavor create --id auto --ram 1024 --disk 2 --vcpus 1 --private m1.amphora
++
++# Create key pair to connect amphora instance via management network
++ssh-keygen -b 2048 -t rsa -N '' -f ~/.ssh/octavia_ssh_key
++openstack keypair create --public-key ~/.ssh/octavia_ssh_key.pub octavia_ssh_key
++
++# Create amphora image from file. Default is https://tarballs.openstack.org/octavia/test-images/
++if [ "$OSH_AMPHORA_IMAGE_FILE_PATH" == "" ]; then
++  curl https://tarballs.openstack.org/octavia/test-images/test-only-amphora-x64-haproxy-ubuntu-xenial.qcow2 \
++  -o /tmp/test-only-amphora-x64-haproxy-ubuntu-xenial.qcow2
++
++  OSH_AMPHORA_IMAGE_FILE_PATH=/tmp/test-only-amphora-x64-haproxy-ubuntu-xenial.qcow2
++fi
++
++OSH_AMPHORA_IMAGE_ID=$(openstack image create -f value -c id \
++    --public \
++    --container-format=bare \
++    --disk-format qcow2 < $OSH_AMPHORA_IMAGE_FILE_PATH \
++    $OSH_LB_AMPHORA_IMAGE_NAME)
++openstack image set --tag amphora $OSH_AMPHORA_IMAGE_ID
+diff --git a/tools/deployment/developer/common/190-create-octavia-certs.sh b/tools/deployment/developer/common/190-create-octavia-certs.sh
+new file mode 100755
+index 0000000..4b4f19d
+--- /dev/null
++++ b/tools/deployment/developer/common/190-create-octavia-certs.sh
+@@ -0,0 +1,49 @@
++#!/bin/bash
++
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++#    Licensed under the Apache License, Version 2.0 (the "License"); you may
++#    not use this file except in compliance with the License. You may obtain
++#    a copy of the License at
++#
++#         http://www.apache.org/licenses/LICENSE-2.0
++#
++#    Unless required by applicable law or agreed to in writing, software
++#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++#    License for the specific language governing permissions and limitations
++#    under the License.
++
++set -xe
++
++function trim_data() {
++  local data_path=$1
++  cat $data_path | base64 -w0 | tr -d '\n'
++}
++
++function create_secret() {
++  {
++  cat <<EOF
++---
++apiVersion: v1
++kind: Secret
++metadata:
++  name: octavia-certs
++type: Opaque
++data:
++   ca_01.pem: $(trim_data /tmp/octavia_certs/ca_01.pem)
++   cakey.pem: $(trim_data /tmp/octavia_certs/private/cakey.pem)
++   client.pem: $(trim_data /tmp/octavia_certs/client.pem)
++EOF
++  }| kubectl apply --namespace openstack -f -
++}
++
++rm -rf /tmp/octavia
++git clone https://github.com/openstack/octavia.git /tmp/octavia
++
++cd /tmp/octavia/bin
++
++rm -rf /tmp/octavia_certs
++./create_certificates.sh /tmp/octavia_certs /tmp/octavia/etc/certificates/openssl.cnf
++
++create_secret
+\ No newline at end of file
+diff --git a/tools/deployment/developer/common/200-octavia.sh b/tools/deployment/developer/common/200-octavia.sh
+new file mode 100755
+index 0000000..2539259
+--- /dev/null
++++ b/tools/deployment/developer/common/200-octavia.sh
+@@ -0,0 +1,123 @@
++#!/bin/bash
++
++# Copyright 2019 Samsung Electronics Co., Ltd.
++#
++#    Licensed under the Apache License, Version 2.0 (the "License"); you may
++#    not use this file except in compliance with the License. You may obtain
++#    a copy of the License at
++#
++#         http://www.apache.org/licenses/LICENSE-2.0
++#
++#    Unless required by applicable law or agreed to in writing, software
++#    distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
++#    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
++#    License for the specific language governing permissions and limitations
++#    under the License.
++
++set -xe
++
++#NOTE: Lint and package chart
++make octavia
++export OS_CLOUD=openstack_helm
++
++: ${OSH_LB_AMPHORA_IMAGE_NAME:="amphora-x64-haproxy"}
++: ${OSH_LB_HM_HOST_PORT:="5555"}
++
++#NOTE: Deploy command
++: ${OSH_EXTRA_HELM_ARGS:=""}
++tee /tmp/octavia.yaml <<EOF
++pod:
++  mounts:
++    octavia_api:
++      octavia_api:
++        volumeMounts:
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/private/cakey.pem
++            subPath: cakey.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/ca_01.pem
++            subPath: ca_01.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/client.pem
++            subPath: client.pem
++        volumes:
++          - name: octavia-certs
++            secret:
++              secretName: octavia-certs
++              defaultMode: 0644
++    octavia_worker:
++      octavia_worker:
++        volumeMounts:
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/private/cakey.pem
++            subPath: cakey.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/ca_01.pem
++            subPath: ca_01.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/client.pem
++            subPath: client.pem
++        volumes:
++          - name: octavia-certs
++            secret:
++              secretName: octavia-certs
++              defaultMode: 0644
++    octavia_housekeeping:
++      octavia_housekeeping:
++        volumeMounts:
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/private/cakey.pem
++            subPath: cakey.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/ca_01.pem
++            subPath: ca_01.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/client.pem
++            subPath: client.pem
++        volumes:
++          - name: octavia-certs
++            secret:
++              secretName: octavia-certs
++              defaultMode: 0644
++    octavia_health_manager:
++      octavia_health_manager:
++        volumeMounts:
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/private/cakey.pem
++            subPath: cakey.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/ca_01.pem
++            subPath: ca_01.pem
++          - name: octavia-certs
++            mountPath: /etc/octavia/certs/client.pem
++            subPath: client.pem
++        volumes:
++          - name: octavia-certs
++            secret:
++              secretName: octavia-certs
++              defaultMode: 0644
++conf:
++  octavia:
++    controller_worker:
++      amp_image_owner_id: $(openstack image show $OSH_LB_AMPHORA_IMAGE_NAME -f value -c owner)
++      amp_secgroup_list: $(openstack security group list -f value | grep lb-mgmt-sec-grp | awk '{print $1}')
++      amp_flavor_id: $(openstack flavor show m1.amphora -f value -c id)
++      amp_boot_network_list: $(openstack network list --name lb-mgmt-net -f value -c ID)
++    health_manager:
++      bind_port: $OSH_LB_HM_HOST_PORT
++      bind_ip: 0.0.0.0
++      controller_ip_port_list: $(cat /tmp/octavia_hm_controller_ip_port_list)
++EOF
++helm upgrade --install octavia ./octavia \
++  --namespace=openstack \
++  --values=/tmp/octavia.yaml \
++  ${OSH_EXTRA_HELM_ARGS} \
++  ${OSH_EXTRA_HELM_ARGS_OCTAVIA}
++
++#NOTE: Wait for deploy
++./tools/deployment/common/wait-for-pods.sh openstack
++
++#NOTE: Validate Deployment info
++export OS_CLOUD=openstack_helm
++openstack service list
++sleep 30 #NOTE(portdirect): Wait for ingress controller to update rules and restart Nginx
+diff --git a/tools/deployment/developer/nfs/180-create-resource-for-octavia.sh b/tools/deployment/developer/nfs/180-create-resource-for-octavia.sh
+new file mode 120000
+index 0000000..770ddd4
+--- /dev/null
++++ b/tools/deployment/developer/nfs/180-create-resource-for-octavia.sh
+@@ -0,0 +1 @@
++../common/180-create-resource-for-octavia.sh
+\ No newline at end of file
+diff --git a/tools/deployment/developer/nfs/190-create-octavia-certs.sh b/tools/deployment/developer/nfs/190-create-octavia-certs.sh
+new file mode 120000
+index 0000000..3cc57c1
+--- /dev/null
++++ b/tools/deployment/developer/nfs/190-create-octavia-certs.sh
+@@ -0,0 +1 @@
++../common/190-create-octavia-certs.sh
+\ No newline at end of file
+diff --git a/tools/deployment/developer/nfs/200-octavia.sh b/tools/deployment/developer/nfs/200-octavia.sh
+new file mode 120000
+index 0000000..003324d
+--- /dev/null
++++ b/tools/deployment/developer/nfs/200-octavia.sh
+@@ -0,0 +1 @@
++../common/200-octavia.sh
+\ No newline at end of file
