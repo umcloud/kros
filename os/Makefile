@@ -23,7 +23,7 @@ DEPLOY_TYPE=multinode
 # TODO(jjo): adapt ceph stuff to Rook
 # NOTE: compute-kit includes: nova, neutron
 # F_ck... it REALLY wants its own ingress (!): installs in kube-system *and* openstack NS ("ingress" Pods)
-DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|Xceph-radosgateway|horizon'
+DEPLOY_GREP='mariadb|rabbitmq|ingress|memcached|keystone|glance|cinder|openvswitch|libvirt|compute-kit|heat|ceph-radosgateway|horizon'
 
 # @navarrow won't let me go without horizon ...
 DEPLOY_SCRIPTS_BASE=$(shell ls $(REPO_ROOT)/openstack-helm/tools/deployment/$(DEPLOY_TYPE)/[0-9]* |egrep $(DEPLOY_GREP))
@@ -154,7 +154,7 @@ set_OSH_EXTRA_HELM_ARGS = \
 # - disable the NETWORK_TUNNEL_DEV logic as this deployment host not necessarily equals nodes (wtf1!)
 # - virt_type=qemu by default, REALLY ?!, use =kvm for HW accel (wtf2!)
 
-os-deploy: creds ceph-client-conf
+os-deploy: creds ceph-client-conf apply-extra-manifests
 	@echo "Deploying for DEPLOY_TYPE: $(DEPLOY_TYPE), DEPLOY_SCRIPTS: $(DEPLOY_SCRIPTS) ..."
 	@$(USE_VENV); cd $(REPO_ROOT)/openstack-helm && \
 		for deploy_script in $(DEPLOY_SCRIPTS); do \
@@ -166,6 +166,10 @@ os-deploy: creds ceph-client-conf
 # utterly manual for now from ongoing upstream PR --jjo, 2019-09-01
 os-deploy-octavia:
 	OSH_EXTRA_HELM_ARGS=$(OSH_EXTRA_HELM_ARGS_BASE) ./octavia-deploy.sh
+
+apply-extra-manifests:
+	kubectl apply -f configs/horizon-lb.svc.yaml
+	kubectl apply -f configs/ceph-ingress-netpol.yaml
 
 # Run 'helm template' instead on each chart, to peek
 # at the generated YAML output for the deploy

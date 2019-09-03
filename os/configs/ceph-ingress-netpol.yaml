@@ -1,0 +1,26 @@
+# Expand stock netpol (for ceph-radosgw):
+# - allow from nginx-ingress ns
+# - allow from horizon pods
+apiVersion: extensions/v1beta1
+kind: NetworkPolicy
+metadata:
+  name: ceph-ingress-netpol
+  namespace: openstack
+spec:
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+          app.kubernetes.io/part-of: ingress-nginx
+    - podSelector:
+        matchLabels:
+          application: horizon
+    ports:
+    - port: 8088
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      application: ceph
+  policyTypes:
+  - Ingress
