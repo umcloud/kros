@@ -1,4 +1,11 @@
 ---
+# added by jjo to force cgroupfs (Ubuntu 18.04 nodes with ~latest docker-ce),
+# else kubelet was crashing with e.g.:
+# Sep 12 15:54:31 um-kros-01 kubelet[32686]: F0912 15:54:31.280267   32686 server.go:273]
+#   failed to run Kubelet: failed to create kubelet: misconfiguration:
+#   kubelet cgroup driver: "systemd" is different from docker cgroup driver: "cgroupfs"
+kubelet_cgroup_driver: cgroupfs
+
 # Kubernetes configuration dirs and system namespace.
 # Those are where all the additional config stuff goes
 # the kubernetes normally puts in /srv/kubernetes.
@@ -188,13 +195,6 @@ podsecuritypolicy_enabled: false
 
 #  Enable creation of QoS cgroup hierarchy, if true top level QoS and pod cgroups are created. (default true)
 # kubelet_cgroups_per_qos: true
-
-# added by jjo to force cgroupfs (Ubuntu 18.04 nodes with ~latest docker-ce),
-# else kubelet was crashing with e.g.:
-# Sep 12 15:54:31 um-kros-01 kubelet[32686]: F0912 15:54:31.280267   32686 server.go:273]
-#   failed to run Kubelet: failed to create kubelet: misconfiguration:
-#   kubelet cgroup driver: "systemd" is different from docker cgroup driver: "cgroupfs"
-kubelet_cgroup_driver: cgroupfs
 
 # A comma separated list of levels of node allocatable enforcement to be enforced by kubelet.
 # Acceptable options are 'pods', 'system-reserved', 'kube-reserved' and ''. Default is "".
