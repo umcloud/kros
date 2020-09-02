@@ -1,6 +1,7 @@
 REPO=https://github.com/kubernetes-incubator/kubespray.git
 REPO_DIR=$(REPO_ROOT)/kubespray
-REPO_COMMIT=v2.11.0
+# kubespray release supporting both v1.15 and v1.16 for cert renewal + upgrade --jjo, 2020-09-02
+REPO_COMMIT=v2.12.3
 
 INVENTORY_DIR=$(CURDIR)/configs/inventory/cluster
 
@@ -17,7 +18,7 @@ init: git-clone packages
 packages:
 	sudo apt-get install -y git python3-venv
 	# ruamel.yaml is needed in the pip env for inventory.py later
-	pyvenv .venv && source .venv/bin/activate && pip3 install --upgrade pip && pip3 install -r $(REPO_DIR)/requirements.txt && pip3 install ruamel.yaml
+	python3 -m virtualenv .venv && source .venv/bin/activate && pip3 install --upgrade pip && pip3 install -r $(REPO_DIR)/requirements.txt && pip3 install ruamel.yaml
 
 inventory-prep:
 	./scripts/10-do-prep.sh $(REPO_DIR) $(INVENTORY_DIR)

@@ -58,6 +58,8 @@ conf:
   nova:
     DEFAULT:
       force_raw_images: false
+      #scheduler_host_subset_size: 6
+
 
 # openstack-helm defaults to 'general' SC, change to null to use default
 # used-by: mariadb, cinder, glance
