@@ -46,7 +46,7 @@ all:
         um-kros-01:
 #        um-kros-02:
         um-kros-03:
-        um-kros-04:
+#        um-kros-04:
     kube-node:
       hosts:
         um-kros-01:
@@ -64,7 +64,7 @@ all:
         um-kros-01:
 #        um-kros-02:
         um-kros-03:
-        um-kros-04:
+#      um-kros-04:
     k8s-cluster:
       children:
         kube-master:

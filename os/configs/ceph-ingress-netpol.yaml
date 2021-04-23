@@ -1,7 +1,7 @@
 # Expand stock netpol (for ceph-radosgw):
 # - allow from nginx-ingress ns
 # - allow from horizon pods
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: ceph-ingress-netpol
