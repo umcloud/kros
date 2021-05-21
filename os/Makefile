@@ -111,7 +111,7 @@ update-ceph-mon-openstack-svc:
 # export MON_1=<hostIP node2>
 # export MON_2=<hostIP node3>
 env-ceph-mons:
-	kubectl get pod -n ${ROOK_CEPH_NS} -l app=${ROOK_CEPH_NS}-mon -l mon -ogo-template='{{range $$i, $$e :=.items}}export MON_{{$$i}}={{.status.hostIP}}.xip.io{{"\n"}}{{end}}'
+	kubectl get pod -n ${ROOK_CEPH_NS} -l app=${ROOK_CEPH_NS}-mon -l mon -ogo-template='{{range $$i, $$e :=.items}}export MON_{{$$i}}={{.status.hostIP}}.nip.io{{"\n"}}{{end}}'
 
 hack-etc-hosts:
 	$(eval INGRESS_IP=$(shell kubectl get svc -n ingress-nginx ingress-nginx -ojsonpath='{.status.loadBalancer.ingress[0].ip}'))
