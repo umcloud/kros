@@ -52,6 +52,9 @@ conf:
       # dnsmasq_local_resolv would need adding routes OS routers towards Kube DNS
       #dnsmasq_local_resolv: True
       dnsmasq_dns_servers: 8.8.8.8, 8.8.4.4
+      ram_allocation_ratio: 2.0
+      disk_allocation_ratio: 2.0
+      cpu_allocation_ratio: 16.0
   # Yet another WTF: unset force_raw_images=true (default), to
   # avoid nova-compute from running `qemu-convert ... ` from qcow2 to raw
   # on every new (uncached) image, and also save disk space yo'
